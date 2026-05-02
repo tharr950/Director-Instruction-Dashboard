@@ -262,6 +262,75 @@ def render_app(config):
         df["days_since_last_1on1"] = (pd.Timestamp(date.today()) - df["last_attended_1on1"]).dt.days
         return df
 
+    @st.cache_data(ttl=3600)
+    def load_meeting_data():
+        query = """
+        WITH time_period AS (
+          SELECT
+            '2026-01-01'::date AS day_start,
+            '2026-04-30'::date AS day_end
+        ),
+        cte_group_meetings AS (
+            SELECT
+                s.supervisor_id as fl_id,
+                e_tutor.id as tutor_id,
+                count(distinct s.id) as attended_group_meetings
+            FROM dw.courses c
+                JOIN dw.sessions s ON s.course_id = c.id
+                JOIN dw.attendances a ON s.id = a.session_id
+                JOIN dw.enrollments e ON e.id = a.enrollment_id
+                JOIN dw.employees e_tutor ON e.enrollee_id = e_tutor.id
+                LEFT JOIN dw.users tutor ON e_tutor.user_id = tutor.id
+            WHERE 1=1
+                AND c.brand_id = 24
+                AND a.attended IS TRUE
+                AND s.starts_at BETWEEN (SELECT day_start FROM time_period)
+                    AND (SELECT day_end FROM time_period)
+            GROUP BY fl_id, tutor_id
+        )
+        SELECT
+            fl.first_name||' '||fl.last_name as faculty_leader,
+            tutor.first_name||' '||tutor.last_name as tutor,
+            CASE WHEN e_tutor.delivery_target < 30
+                THEN 'Adjunct'
+                ELSE 'Professional'
+            END AS tutor_type,
+            e_tutor.hire_date,
+            count(distinct s.id) as "1on1_meeting_count",
+            sum(s.duration)/60.0 as "1on1_meeting_hours",
+            max(s.starts_at) as last_attended_1on1,
+            cte_group_meetings.attended_group_meetings
+        FROM dw.courses c
+            JOIN dw.sessions s ON s.course_id = c.id
+            JOIN dw.employees e_fl ON e_fl.id = s.supervisor_id
+            JOIN dw.users fl ON e_fl.user_id = fl.id
+            JOIN dw.attendances a ON s.id = a.session_id
+            JOIN dw.enrollments e ON e.id = a.enrollment_id
+            JOIN dw.employees e_tutor ON e.enrollee_id = e_tutor.id
+            LEFT JOIN dw.users tutor ON e_tutor.user_id = tutor.id
+            LEFT JOIN cte_group_meetings
+                ON (cte_group_meetings.fl_id = s.supervisor_id
+                AND cte_group_meetings.tutor_id = e_tutor.id)
+        WHERE 1=1
+            AND c.brand_id = 25
+            AND s.attendances_attended_count = 1
+            AND s.starts_at BETWEEN (SELECT day_start FROM time_period)
+                    AND (SELECT day_end FROM time_period)
+            AND a.attended IS TRUE
+        GROUP BY faculty_leader, tutor, e_tutor.hire_date,
+                 cte_group_meetings.attended_group_meetings, e_tutor.delivery_target
+        ORDER BY 1
+        """
+        conn = get_redshift_connection()
+        df = pd.read_sql(query, conn)
+        df["hire_date"] = pd.to_datetime(df["hire_date"])
+        df["last_attended_1on1"] = pd.to_datetime(df["last_attended_1on1"])
+        df["1on1_meeting_hours"] = df["1on1_meeting_hours"].astype(float).round(1)
+        df["attended_group_meetings"] = df["attended_group_meetings"].fillna(0).astype(int)
+        df["days_since_last_1on1"] = (pd.Timestamp.now() - df["last_attended_1on1"]).dt.days
+        return df
+
+
     # ── Load data ─────────────────────────────────────────────────────────────
     try:
         df = load_team_data()
@@ -400,9 +469,9 @@ def render_app(config):
             )
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # TAB 2 — TIER BREAKDOWN
+    # PAGE — TIER BREAKDOWN
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    with tab_tier:
+    if page == "📊 Tier Breakdown":
         st.markdown(
             "<p class='section-label'>Tiers</p>"
             "<p class='section-title'>Tier Distribution by Team</p>",
@@ -488,9 +557,9 @@ def render_app(config):
         st.dataframe(tier_detail, hide_index=True, use_container_width=True)
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # TAB 3 — TENURE
+    # PAGE — TENURE
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    with tab_tenure:
+    if page == "⏳ Tenure":
         st.markdown(
             "<p class='section-label'>Tenure</p>"
             "<p class='section-title'>Team Tenure Analysis</p>",
@@ -564,9 +633,9 @@ def render_app(config):
         st.plotly_chart(fig_hist, use_container_width=True)
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # TAB 4 — BUC / PT SPLIT
+    # PAGE — BUC / PT SPLIT
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    with tab_brand:
+    if page == "🔀 BUC / PT Split":
         st.markdown(
             "<p class='section-label'>Brand Composition</p>"
             "<p class='section-title'>BUC vs. Private Tutoring Split</p>",
