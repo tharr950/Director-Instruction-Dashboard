@@ -150,10 +150,92 @@ def render_app(config):
         df["days_since_last_1on1"] = (pd.Timestamp.now() - df["last_attended_1on1"]).dt.days
         return df
 
+    @st.cache_data(ttl=3600)
+    def load_restricted_data():
+        query = """
+        WITH cte_employee_with_histories AS (
+            SELECT
+                item_id AS employee_id,
+                CASE WHEN histories.updated_by_type = 'Employee'
+                     THEN histories.updated_by_id ELSE NULL END AS updated_by_employee_id,
+                CASE WHEN histories.value = 'Restricted' THEN True ELSE False END AS restricted,
+                histories.created_at AS status_starts_at
+            FROM dw.histories
+            JOIN dw.employees ON histories.item_id = employees.id
+            WHERE employees.end_date IS NULL
+                AND item_type = 'Employee' AND attr = 'tutor_type'
+        ),
+        cte_employee_wo_history AS (
+            SELECT
+                id AS employee_id,
+                -1 AS updated_by_employee_id,
+                CASE WHEN employees.tutor_type = 'Restricted' THEN True ELSE False END AS restricted,
+                employees.created_at AS status_starts_at
+            FROM dw.employees
+            WHERE employees.end_date IS NULL
+                AND id NOT IN (SELECT DISTINCT employee_id FROM cte_employee_with_histories)
+        ),
+        cte_all_histories AS (
+            SELECT * FROM cte_employee_with_histories
+            UNION
+            SELECT * FROM cte_employee_wo_history
+        )
+        SELECT
+            cte_all_histories.employee_id,
+            users.first_name || ' ' || users.last_name AS employee_name,
+            teams.name AS team,
+            tiers.name AS tier,
+            cte_all_histories.updated_by_employee_id,
+            updated_by_users.first_name || ' ' || updated_by_users.last_name AS updated_by_employee_name,
+            CASE
+                WHEN cte_all_histories.employee_id = cte_all_histories.updated_by_employee_id THEN 'Tutor'
+                WHEN cte_all_histories.updated_by_employee_id = -1 THEN 'Never Changed'
+                ELSE 'Admin'
+            END AS update_type,
+            cte_all_histories.restricted,
+            cte_all_histories.status_starts_at,
+            CASE
+                WHEN LAG(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at DESC) IS NULL
+                THEN NULL
+                ELSE DATEADD(SECOND, -1, LAG(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at DESC))
+            END AS status_ends_at,
+            DATEDIFF(DAY, status_starts_at, status_ends_at) AS days_in_effect,
+            CASE WHEN LAG(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at DESC) IS NULL
+                THEN 1 ELSE 0 END AS current_status_flag
+        FROM cte_all_histories
+            JOIN dw.employees ON employees.id = cte_all_histories.employee_id
+            JOIN dw.users ON users.id = employees.user_id
+            JOIN dw.tiers ON employees.tier_id = tiers.id
+            LEFT JOIN dw.employees updated_by_employees
+                ON updated_by_employees.id = cte_all_histories.updated_by_employee_id
+            LEFT JOIN dw.users updated_by_users
+                ON updated_by_users.id = updated_by_employees.user_id
+            JOIN dw.team_members ON team_members.member_id = employees.id
+            JOIN dw.teams ON teams.id = team_members.team_id
+        WHERE 1=1
+        GROUP BY cte_all_histories.employee_id, employee_name, teams.name, tiers.name,
+                 cte_all_histories.updated_by_employee_id, updated_by_employee_name,
+                 cte_all_histories.restricted, cte_all_histories.status_starts_at
+        HAVING restricted = TRUE
+            AND status_starts_at >= '2025-01-01'
+        """
+        conn = get_redshift_connection()
+        df = pd.read_sql(query, conn)
+        df["status_starts_at"] = pd.to_datetime(df["status_starts_at"])
+        df["status_ends_at"] = pd.to_datetime(df["status_ends_at"])
+        # For currently restricted tutors, compute days since restriction started
+        df.loc[df["current_status_flag"] == 1, "days_in_effect"] = (
+            pd.Timestamp.now() - df.loc[df["current_status_flag"] == 1, "status_starts_at"]
+        ).dt.days
+        return df
+
+
+
     # ── Load data ─────────────────────────────────────────────────────────────
     try:
         df = load_team_data()
         df_meetings = load_meeting_data()
+        df_restricted = load_restricted_data()
     except Exception as e:
         st.error(f"Could not connect to Redshift: {e}")
         st.stop()
@@ -184,6 +266,7 @@ def render_app(config):
             "📊 Tier Breakdown",
             "⏳ Tenure",
             "🔀 BUC / PT Split",
+            "🚫 Restricted Status",
             "📅 Meetings",
             "📋 Full Roster",
         ]
@@ -470,6 +553,161 @@ def render_app(config):
                 showlegend=False, margin=dict(l=10, r=10, t=40, b=10), height=350,
             )
             st.plotly_chart(fig_donut, use_container_width=True)
+
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAGE — RESTRICTED STATUS
+    # ══════════════════════════════════════════════════════════════════════════
+    elif page == "🚫 Restricted Status":
+        st.markdown(
+            "<p class='section-label'>Restricted Tutors</p>"
+            "<p class='section-title'>Current & Historical Restricted Status</p>",
+            unsafe_allow_html=True,
+        )
+
+        # Current restricted tutors
+        currently_restricted = df_restricted[df_restricted["current_status_flag"] == 1].copy()
+
+        cr1, cr2, cr3 = st.columns(3)
+        cr1.metric("Currently Restricted", len(currently_restricted))
+        if len(currently_restricted) > 0:
+            cr2.metric("Avg Days Restricted", f"{currently_restricted['days_in_effect'].mean():.0f}")
+            cr3.metric("Max Days Restricted", f"{currently_restricted['days_in_effect'].max():.0f}")
+        else:
+            cr2.metric("Avg Days Restricted", "—")
+            cr3.metric("Max Days Restricted", "—")
+
+        st.markdown("")
+
+        # Currently restricted by team
+        if len(currently_restricted) > 0:
+            st.markdown(
+                "<p class='section-label'>Current</p>"
+                "<p class='section-title'>Currently Restricted Tutors</p>",
+                unsafe_allow_html=True,
+            )
+
+            team_restricted = (
+                currently_restricted.groupby("team")
+                .agg(
+                    count=("employee_id", "count"),
+                    avg_days=("days_in_effect", "mean"),
+                    max_days=("days_in_effect", "max"),
+                )
+                .reset_index()
+                .rename(columns={"team": "Team"})
+                .sort_values("count", ascending=False)
+            )
+            team_restricted["avg_days"] = team_restricted["avg_days"].round(0).astype(int)
+            team_restricted["max_days"] = team_restricted["max_days"].astype(int)
+
+            col_rc, col_rt = st.columns([1.3, 1])
+
+            with col_rc:
+                fig_r = go.Figure()
+                fig_r.add_trace(go.Bar(
+                    x=team_restricted["Team"], y=team_restricted["count"],
+                    marker_color="#ef4444",
+                    text=team_restricted["count"], textposition="outside",
+                    textfont=dict(size=13),
+                ))
+                fig_r.update_layout(
+                    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(family="DM Sans", color="#475569"),
+                    margin=dict(l=40, r=20, t=20, b=60),
+                    xaxis=dict(tickangle=-30, gridcolor="rgba(226,232,240,0.8)"),
+                    yaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Restricted Tutors"),
+                    height=350,
+                )
+                st.plotly_chart(fig_r, use_container_width=True)
+
+            with col_rt:
+                st.dataframe(
+                    team_restricted.rename(columns={
+                        "count": "Restricted", "avg_days": "Avg Days", "max_days": "Max Days",
+                    }),
+                    hide_index=True, use_container_width=True, height=350,
+                )
+
+            # Individual tutor detail
+            st.markdown("")
+            curr_display = (
+                currently_restricted[["employee_name", "team", "tier", "update_type",
+                                      "status_starts_at", "days_in_effect"]]
+                .rename(columns={
+                    "employee_name": "Tutor", "team": "Team", "tier": "Tier",
+                    "update_type": "Set By", "status_starts_at": "Restricted Since",
+                    "days_in_effect": "Days Restricted",
+                })
+                .sort_values("Days Restricted", ascending=False)
+            )
+            curr_display["Restricted Since"] = curr_display["Restricted Since"].dt.strftime("%Y-%m-%d")
+            curr_display["Days Restricted"] = curr_display["Days Restricted"].astype(int)
+            st.dataframe(curr_display, hide_index=True, use_container_width=True)
+
+        else:
+            st.success("No tutors are currently on restricted status.")
+
+        # Historical restricted status
+        st.markdown("")
+        st.markdown(
+            "<p class='section-label'>History</p>"
+            "<p class='section-title'>Restricted Status History (Since Jan 2025)</p>",
+            unsafe_allow_html=True,
+        )
+
+        hist_restricted = df_restricted[df_restricted["current_status_flag"] == 0].copy()
+
+        if len(hist_restricted) > 0:
+            # Count of restriction events by team
+            hist_by_team = (
+                hist_restricted.groupby("team")
+                .agg(
+                    events=("employee_id", "count"),
+                    unique_tutors=("employee_id", "nunique"),
+                    avg_days=("days_in_effect", "mean"),
+                )
+                .reset_index()
+                .rename(columns={"team": "Team"})
+                .sort_values("events", ascending=False)
+            )
+            hist_by_team["avg_days"] = hist_by_team["avg_days"].round(0).astype(int)
+
+            st.dataframe(
+                hist_by_team.rename(columns={
+                    "events": "Restriction Events", "unique_tutors": "Unique Tutors",
+                    "avg_days": "Avg Days Per Event",
+                }),
+                hide_index=True, use_container_width=True,
+            )
+
+            st.markdown("")
+            hist_display = (
+                df_restricted[["employee_name", "team", "tier", "update_type",
+                                "status_starts_at", "status_ends_at", "days_in_effect",
+                                "current_status_flag"]]
+                .rename(columns={
+                    "employee_name": "Tutor", "team": "Team", "tier": "Tier",
+                    "update_type": "Set By", "status_starts_at": "Start",
+                    "status_ends_at": "End", "days_in_effect": "Days",
+                    "current_status_flag": "Current",
+                })
+                .sort_values("Start", ascending=False)
+            )
+            hist_display["Start"] = hist_display["Start"].dt.strftime("%Y-%m-%d")
+            hist_display["End"] = hist_display["End"].dt.strftime("%Y-%m-%d").fillna("Present")
+            hist_display["Days"] = hist_display["Days"].fillna(0).astype(int)
+            hist_display["Current"] = hist_display["Current"].map({1: "Yes", 0: "No"})
+
+            hist_search = st.text_input("🔍 Search tutor", placeholder="Type to filter...", key="restr_search")
+            if hist_search:
+                hist_display = hist_display[hist_display["Tutor"].str.contains(hist_search, case=False, na=False)]
+
+            st.dataframe(hist_display, hide_index=True, use_container_width=True,
+                         height=min(600, len(hist_display) * 35 + 60))
+        else:
+            st.info("No historical restriction events found since Jan 2025.")
+
 
     # ══════════════════════════════════════════════════════════════════════════
     # PAGE — MEETINGS
