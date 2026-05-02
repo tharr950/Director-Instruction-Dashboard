@@ -27,30 +27,22 @@ def render_app(config):
         font-family: 'DM Sans', sans-serif;
     }
 
-    .stApp {
-        background: #0b0f19;
-        color: #e2dfd8;
-    }
-
     /* Sidebar */
     [data-testid="stSidebar"] {
-        background: #111827 !important;
-        border-right: 1px solid #1e293b;
-    }
-    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
-        color: #94a3b8;
+        background: #f8f9fb !important;
+        border-right: 1px solid #e2e8f0;
     }
 
     /* Headers */
     h1, h2, h3 {
         font-family: 'Source Serif 4', serif !important;
-        color: #f1efe9 !important;
+        color: #1e293b !important;
     }
 
     /* Metric cards */
     [data-testid="metric-container"] {
-        background: #111827;
-        border: 1px solid #1e293b;
+        background: #f8f9fb;
+        border: 1px solid #e2e8f0;
         border-radius: 10px;
         padding: 16px 20px;
     }
@@ -62,7 +54,7 @@ def render_app(config):
         font-weight: 600;
     }
     [data-testid="metric-container"] [data-testid="stMetricValue"] {
-        color: #f8fafc !important;
+        color: #1e293b !important;
         font-size: 1.9rem !important;
         font-family: 'Source Serif 4', serif !important;
     }
@@ -73,30 +65,31 @@ def render_app(config):
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 0px;
-        background: #111827;
+        background: #f1f5f9;
         border-radius: 8px;
         padding: 4px;
     }
     .stTabs [data-baseweb="tab"] {
         border-radius: 6px;
         padding: 8px 20px;
-        color: #94a3b8;
+        color: #64748b;
         font-weight: 500;
     }
     .stTabs [aria-selected="true"] {
-        background: #1e293b !important;
-        color: #f8fafc !important;
+        background: #ffffff !important;
+        color: #1e293b !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
 
     /* Dataframes */
     [data-testid="stDataFrame"] {
-        border: 1px solid #1e293b;
+        border: 1px solid #e2e8f0;
         border-radius: 8px;
     }
 
     /* Divider */
     hr {
-        border-color: #1e293b !important;
+        border-color: #e2e8f0 !important;
     }
 
     /* Section header helper */
@@ -106,13 +99,13 @@ def render_app(config):
         font-weight: 600;
         letter-spacing: 0.15em;
         text-transform: uppercase;
-        color: #475569;
+        color: #94a3b8;
         margin-bottom: 4px;
     }
     .section-title {
         font-family: 'Source Serif 4', serif;
         font-size: 1.6rem;
-        color: #f1efe9;
+        color: #1e293b;
         margin-bottom: 16px;
     }
 
@@ -137,7 +130,6 @@ def render_app(config):
 
     @st.cache_data(ttl=3600)
     def load_team_data():
-        """Pull active tutor roster with team, tier, tenure, and BUC/PT info."""
         query = """
         SELECT DISTINCT
             e1.id AS tutor_id,
@@ -190,13 +182,11 @@ def render_app(config):
         conn = get_redshift_connection()
         df = pd.read_sql(query, conn)
 
-        # Compute tenure
         today = pd.Timestamp(date.today())
         df["hire_date"] = pd.to_datetime(df["hire_date"])
         df["tenure_days"] = (today - df["hire_date"]).dt.days
         df["tenure_years"] = (df["tenure_days"] / 365.25).round(1)
 
-        # Determine brand composition label
         df["brand_composition"] = np.where(
             df["buc_only"], "BUC Only",
             np.where(df["buc_and_pt"], "BUC & PT", "PT Only")
@@ -217,8 +207,8 @@ def render_app(config):
     with st.sidebar:
         st.markdown(
             "<p style='font-family: Source Serif 4, serif; font-size:1.4rem; "
-            "color:#f1efe9; margin-bottom:0;'>Team Overview</p>"
-            "<p style='color:#475569; font-size:0.8rem; margin-top:0;'>Instruction Leader Dashboard</p>",
+            "color:#1e293b; margin-bottom:0;'>Team Overview</p>"
+            "<p style='color:#64748b; font-size:0.8rem; margin-top:0;'>Instruction Leader Dashboard</p>",
             unsafe_allow_html=True,
         )
         st.divider()
@@ -232,7 +222,7 @@ def render_app(config):
 
         st.divider()
         st.markdown(
-            f"<p style='color:#475569; font-size:0.75rem;'>"
+            f"<p style='color:#64748b; font-size:0.75rem;'>"
             f"Data as of {date.today().strftime('%B %d, %Y')}<br>"
             f"Total active tutors: {len(df)}</p>",
             unsafe_allow_html=True,
@@ -277,7 +267,6 @@ def render_app(config):
             unsafe_allow_html=True,
         )
 
-        # Summary table
         team_summary = (
             filt.groupby("manager")
             .agg(
@@ -309,7 +298,7 @@ def render_app(config):
                 x=team_summary["Faculty Leader"],
                 y=team_summary["adjunct"],
                 name="Adjunct",
-                marker_color="#64748b",
+                marker_color="#94a3b8",
                 text=team_summary["adjunct"],
                 textposition="inside",
                 textfont=dict(size=13, color="white"),
@@ -318,12 +307,12 @@ def render_app(config):
                 barmode="stack",
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                font=dict(family="DM Sans", color="#94a3b8"),
+                font=dict(family="DM Sans", color="#475569"),
                 legend=dict(orientation="h", y=1.08, x=0.5, xanchor="center",
                             font=dict(size=12)),
                 margin=dict(l=40, r=20, t=40, b=60),
-                xaxis=dict(tickangle=-30, gridcolor="rgba(30,41,59,0.5)"),
-                yaxis=dict(gridcolor="rgba(30,41,59,0.5)", title="Tutor Count"),
+                xaxis=dict(tickangle=-30, gridcolor="rgba(226,232,240,0.8)"),
+                yaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Tutor Count"),
                 height=400,
             )
             st.plotly_chart(fig, use_container_width=True)
@@ -358,7 +347,6 @@ def render_app(config):
         )
         tier_order = filt["tier"].value_counts().index.tolist()
 
-        # Palette for tiers
         tier_colors = {
             tier: color for tier, color in zip(
                 tier_order,
@@ -387,18 +375,17 @@ def render_app(config):
                 barmode="stack",
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                font=dict(family="DM Sans", color="#94a3b8"),
+                font=dict(family="DM Sans", color="#475569"),
                 legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center",
                             font=dict(size=11)),
                 margin=dict(l=10, r=20, t=20, b=60),
-                xaxis=dict(gridcolor="rgba(30,41,59,0.5)", title="Tutor Count"),
+                xaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Tutor Count"),
                 yaxis=dict(automargin=True),
                 height=max(300, len(selected_managers) * 55 + 100),
             )
             st.plotly_chart(fig2, use_container_width=True)
 
         with col_pies:
-            # Overall tier distribution
             overall_tier = filt["tier"].value_counts().reset_index()
             overall_tier.columns = ["tier", "count"]
             fig_pie = go.Figure(go.Pie(
@@ -406,22 +393,21 @@ def render_app(config):
                 values=overall_tier["count"],
                 marker=dict(colors=[tier_colors.get(t, "#64748b") for t in overall_tier["tier"]]),
                 textinfo="label+percent",
-                textfont=dict(size=12, color="white"),
+                textfont=dict(size=12),
                 hole=0.45,
             ))
             fig_pie.update_layout(
-                title=dict(text="Overall Tier Mix", font=dict(size=14, color="#94a3b8"),
+                title=dict(text="Overall Tier Mix", font=dict(size=14, color="#475569"),
                            x=0.5, xanchor="center"),
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                font=dict(family="DM Sans", color="#94a3b8"),
+                font=dict(family="DM Sans", color="#475569"),
                 showlegend=False,
                 margin=dict(l=10, r=10, t=40, b=10),
                 height=350,
             )
             st.plotly_chart(fig_pie, use_container_width=True)
 
-        # Tier detail table
         tier_detail = (
             filt.pivot_table(index="manager", columns="tier", values="tutor_id",
                              aggfunc="count", fill_value=0)
@@ -470,15 +456,15 @@ def render_app(config):
                     name=mgr,
                     boxmean=True,
                     marker_color="#3b82f6",
-                    line_color="#60a5fa",
-                    fillcolor="rgba(59,130,246,0.15)",
+                    line_color="#2563eb",
+                    fillcolor="rgba(59,130,246,0.12)",
                 ))
             fig3.update_layout(
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                font=dict(family="DM Sans", color="#94a3b8"),
+                font=dict(family="DM Sans", color="#475569"),
                 margin=dict(l=40, r=20, t=20, b=60),
-                yaxis=dict(gridcolor="rgba(30,41,59,0.5)", title="Tenure (years)"),
+                yaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Tenure (years)"),
                 xaxis=dict(tickangle=-30),
                 showlegend=False,
                 height=420,
@@ -488,7 +474,6 @@ def render_app(config):
         with col_stats:
             st.dataframe(tenure_stats, hide_index=True, use_container_width=True, height=420)
 
-        # Tenure histogram — all tutors
         st.markdown("")
         fig_hist = go.Figure(go.Histogram(
             x=filt["tenure_years"],
@@ -498,12 +483,12 @@ def render_app(config):
         ))
         fig_hist.update_layout(
             title=dict(text="Tenure Distribution (All Filtered Tutors)",
-                       font=dict(size=14, color="#94a3b8"), x=0.5, xanchor="center"),
+                       font=dict(size=14, color="#475569"), x=0.5, xanchor="center"),
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
-            font=dict(family="DM Sans", color="#94a3b8"),
-            xaxis=dict(title="Years", gridcolor="rgba(30,41,59,0.5)"),
-            yaxis=dict(title="Count", gridcolor="rgba(30,41,59,0.5)"),
+            font=dict(family="DM Sans", color="#475569"),
+            xaxis=dict(title="Years", gridcolor="rgba(226,232,240,0.8)"),
+            yaxis=dict(title="Count", gridcolor="rgba(226,232,240,0.8)"),
             margin=dict(l=40, r=20, t=50, b=40),
             height=300,
         )
@@ -550,12 +535,12 @@ def render_app(config):
                 barmode="stack",
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                font=dict(family="DM Sans", color="#94a3b8"),
+                font=dict(family="DM Sans", color="#475569"),
                 legend=dict(orientation="h", y=1.08, x=0.5, xanchor="center",
                             font=dict(size=12)),
                 margin=dict(l=40, r=20, t=40, b=60),
-                xaxis=dict(tickangle=-30, gridcolor="rgba(30,41,59,0.5)"),
-                yaxis=dict(gridcolor="rgba(30,41,59,0.5)", title="Tutor Count"),
+                xaxis=dict(tickangle=-30, gridcolor="rgba(226,232,240,0.8)"),
+                yaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Tutor Count"),
                 height=400,
             )
             st.plotly_chart(fig4, use_container_width=True)
@@ -571,7 +556,6 @@ def render_app(config):
             brand_detail = brand_detail.sort_values("Total", ascending=False)
             st.dataframe(brand_detail, hide_index=True, use_container_width=True, height=400)
 
-        # Overall brand composition donut
         st.markdown("")
         ov_brand = filt["brand_composition"].value_counts().reset_index()
         ov_brand.columns = ["brand_composition", "count"]
@@ -584,16 +568,16 @@ def render_app(config):
                 marker=dict(colors=[brand_colors.get(b, "#64748b")
                                     for b in ov_brand["brand_composition"]]),
                 textinfo="label+value+percent",
-                textfont=dict(size=13, color="white"),
+                textfont=dict(size=13),
                 hole=0.5,
             ))
             fig_donut.update_layout(
                 title=dict(text="Overall Brand Composition",
-                           font=dict(size=14, color="#94a3b8"),
+                           font=dict(size=14, color="#475569"),
                            x=0.5, xanchor="center"),
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                font=dict(family="DM Sans", color="#94a3b8"),
+                font=dict(family="DM Sans", color="#475569"),
                 showlegend=False,
                 margin=dict(l=10, r=10, t=40, b=10),
                 height=350,
@@ -627,7 +611,6 @@ def render_app(config):
         )
         roster["Hire Date"] = roster["Hire Date"].dt.strftime("%Y-%m-%d")
 
-        # Search
         search = st.text_input("🔍 Search tutor name", placeholder="Type to filter...")
         if search:
             roster = roster[roster["Tutor"].str.contains(search, case=False, na=False)]
