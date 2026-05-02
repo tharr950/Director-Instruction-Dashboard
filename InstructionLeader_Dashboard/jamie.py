@@ -194,9 +194,78 @@ def render_app(config):
 
         return df
 
+    @st.cache_data(ttl=3600)
+    def load_meeting_data():
+        query = """
+        WITH time_period AS (
+          SELECT
+            '2026-01-01'::date AS day_start,
+            '2026-04-30'::date AS day_end
+        ),
+        cte_group_meetings AS (
+            SELECT
+                s.supervisor_id as fl_id,
+                e_tutor.id as tutor_id,
+                count(distinct s.id) as attended_group_meetings
+            FROM dw.courses c
+                JOIN dw.sessions s ON s.course_id = c.id
+                JOIN dw.attendances a ON s.id = a.session_id
+                JOIN dw.enrollments e ON e.id = a.enrollment_id
+                JOIN dw.employees e_tutor ON e.enrollee_id = e_tutor.id
+                LEFT JOIN dw.users tutor ON e_tutor.user_id = tutor.id
+            WHERE 1=1
+                AND c.brand_id = 24
+                AND a.attended IS TRUE
+                AND s.starts_at BETWEEN (SELECT day_start FROM time_period)
+                    AND (SELECT day_end FROM time_period)
+            GROUP BY fl_id, tutor_id
+        )
+        SELECT
+            fl.first_name||' '||fl.last_name as faculty_leader,
+            tutor.first_name||' '||tutor.last_name as tutor,
+            CASE WHEN e_tutor.delivery_target < 30
+                THEN 'Adjunct'
+                ELSE 'Professional'
+            END AS tutor_type,
+            e_tutor.hire_date,
+            count(distinct s.id) as "1on1_meeting_count",
+            sum(s.duration)/60.0 as "1on1_meeting_hours",
+            max(s.starts_at) as last_attended_1on1,
+            cte_group_meetings.attended_group_meetings
+        FROM dw.courses c
+            JOIN dw.sessions s ON s.course_id = c.id
+            JOIN dw.employees e_fl ON e_fl.id = s.supervisor_id
+            JOIN dw.users fl ON e_fl.user_id = fl.id
+            JOIN dw.attendances a ON s.id = a.session_id
+            JOIN dw.enrollments e ON e.id = a.enrollment_id
+            JOIN dw.employees e_tutor ON e.enrollee_id = e_tutor.id
+            LEFT JOIN dw.users tutor ON e_tutor.user_id = tutor.id
+            LEFT JOIN cte_group_meetings
+                ON (cte_group_meetings.fl_id = s.supervisor_id
+                AND cte_group_meetings.tutor_id = e_tutor.id)
+        WHERE 1=1
+            AND c.brand_id = 25
+            AND s.attendances_attended_count = 1
+            AND s.starts_at BETWEEN (SELECT day_start FROM time_period)
+                    AND (SELECT day_end FROM time_period)
+            AND a.attended IS TRUE
+        GROUP BY faculty_leader, tutor, e_tutor.hire_date,
+                 cte_group_meetings.attended_group_meetings, e_tutor.delivery_target
+        ORDER BY 1
+        """
+        conn = get_redshift_connection()
+        df = pd.read_sql(query, conn)
+        df["hire_date"] = pd.to_datetime(df["hire_date"])
+        df["last_attended_1on1"] = pd.to_datetime(df["last_attended_1on1"])
+        df["1on1_meeting_hours"] = df["1on1_meeting_hours"].astype(float).round(1)
+        df["attended_group_meetings"] = df["attended_group_meetings"].fillna(0).astype(int)
+        df["days_since_last_1on1"] = (pd.Timestamp(date.today()) - df["last_attended_1on1"]).dt.days
+        return df
+
     # ── Load data ─────────────────────────────────────────────────────────────
     try:
         df = load_team_data()
+        df_meetings = load_meeting_data()
     except Exception as e:
         st.error(f"Could not connect to Redshift: {e}")
         st.stop()
@@ -253,8 +322,8 @@ def render_app(config):
     st.markdown("")
 
     # ── Tabs ──────────────────────────────────────────────────────────────────
-    tab_team, tab_tier, tab_tenure, tab_brand, tab_roster = st.tabs([
-        "👥 Team Counts", "📊 Tier Breakdown", "⏳ Tenure", "🔀 BUC / PT Split", "📋 Full Roster"
+    tab_team, tab_tier, tab_tenure, tab_brand, tab_meetings, tab_roster = st.tabs([
+        "👥 Team Counts", "📊 Tier Breakdown", "⏳ Tenure", "🔀 BUC / PT Split", "📅 Meetings", "📋 Full Roster"
     ])
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -584,8 +653,163 @@ def render_app(config):
             )
             st.plotly_chart(fig_donut, use_container_width=True)
 
+
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # TAB 5 — FULL ROSTER
+    # TAB 5 — MEETINGS
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    with tab_meetings:
+        st.markdown(
+            "<p class='section-label'>Meeting Frequency</p>"
+            "<p class='section-title'>1-on-1 & Group Meetings (Jan–Apr 2026)</p>",
+            unsafe_allow_html=True,
+        )
+
+        # Filter meetings by selected managers
+        mtg = df_meetings[df_meetings["faculty_leader"].isin(selected_managers)].copy()
+
+        # Top-level meeting metrics
+        mm1, mm2, mm3, mm4 = st.columns(4)
+        mm1.metric("Avg 1:1s per Tutor", f"{mtg['1on1_meeting_count'].mean():.1f}")
+        mm2.metric("Avg 1:1 Hours", f"{mtg['1on1_meeting_hours'].mean():.1f}")
+        mm3.metric("Avg Group Meetings", f"{mtg['attended_group_meetings'].mean():.1f}")
+        avg_days = mtg["days_since_last_1on1"].mean()
+        mm4.metric("Avg Days Since Last 1:1", f"{avg_days:.0f}" if not pd.isna(avg_days) else "—")
+
+        st.markdown("")
+
+        # FL-level summary
+        fl_mtg_summary = (
+            mtg.groupby("faculty_leader")
+            .agg(
+                tutors=("tutor", "count"),
+                avg_1on1s=("1on1_meeting_count", "mean"),
+                total_1on1_hrs=("1on1_meeting_hours", "sum"),
+                avg_group=("attended_group_meetings", "mean"),
+                avg_days_since=("days_since_last_1on1", "mean"),
+            )
+            .reset_index()
+            .rename(columns={"faculty_leader": "Faculty Leader"})
+            .sort_values("avg_1on1s", ascending=False)
+        )
+        for c in ["avg_1on1s", "total_1on1_hrs", "avg_group", "avg_days_since"]:
+            fl_mtg_summary[c] = fl_mtg_summary[c].round(1)
+
+        col_mtg_chart, col_mtg_table = st.columns([1.3, 1])
+
+        with col_mtg_chart:
+            fig_mtg = go.Figure()
+            fig_mtg.add_trace(go.Bar(
+                x=fl_mtg_summary["Faculty Leader"],
+                y=fl_mtg_summary["avg_1on1s"],
+                name="Avg 1:1 Meetings",
+                marker_color="#3b82f6",
+                text=fl_mtg_summary["avg_1on1s"],
+                textposition="outside",
+                textfont=dict(size=12),
+            ))
+            fig_mtg.add_trace(go.Bar(
+                x=fl_mtg_summary["Faculty Leader"],
+                y=fl_mtg_summary["avg_group"],
+                name="Avg Group Meetings",
+                marker_color="#8b5cf6",
+                text=fl_mtg_summary["avg_group"],
+                textposition="outside",
+                textfont=dict(size=12),
+            ))
+            fig_mtg.update_layout(
+                barmode="group",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(family="DM Sans", color="#475569"),
+                legend=dict(orientation="h", y=1.08, x=0.5, xanchor="center",
+                            font=dict(size=12)),
+                margin=dict(l=40, r=20, t=40, b=60),
+                xaxis=dict(tickangle=-30, gridcolor="rgba(226,232,240,0.8)"),
+                yaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Avg Meetings per Tutor"),
+                height=400,
+            )
+            st.plotly_chart(fig_mtg, use_container_width=True)
+
+        with col_mtg_table:
+            st.dataframe(
+                fl_mtg_summary.rename(columns={
+                    "tutors": "Tutors",
+                    "avg_1on1s": "Avg 1:1s",
+                    "total_1on1_hrs": "Total 1:1 Hrs",
+                    "avg_group": "Avg Group",
+                    "avg_days_since": "Avg Days Since Last 1:1",
+                }),
+                hide_index=True,
+                use_container_width=True,
+                height=400,
+            )
+
+        # Days since last 1:1 — flag tutors overdue
+        st.markdown("")
+        st.markdown(
+            "<p class='section-label'>Attention</p>"
+            "<p class='section-title'>Tutors by Days Since Last 1-on-1</p>",
+            unsafe_allow_html=True,
+        )
+
+        fig_days = go.Figure()
+        for mgr in sorted(mtg["faculty_leader"].unique()):
+            mgr_data = mtg[mtg["faculty_leader"] == mgr]
+            fig_days.add_trace(go.Box(
+                y=mgr_data["days_since_last_1on1"],
+                name=mgr,
+                boxmean=True,
+                marker_color="#3b82f6",
+                line_color="#2563eb",
+                fillcolor="rgba(59,130,246,0.12)",
+            ))
+        fig_days.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="DM Sans", color="#475569"),
+            margin=dict(l=40, r=20, t=20, b=60),
+            yaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Days Since Last 1:1"),
+            xaxis=dict(tickangle=-30),
+            showlegend=False,
+            height=350,
+        )
+        st.plotly_chart(fig_days, use_container_width=True)
+
+        # Detailed tutor-level meeting table
+        st.markdown("")
+        st.markdown(
+            "<p class='section-label'>Detail</p>"
+            "<p class='section-title'>Tutor-Level Meeting Log</p>",
+            unsafe_allow_html=True,
+        )
+
+        mtg_display = (
+            mtg[["faculty_leader", "tutor", "tutor_type", "1on1_meeting_count",
+                 "1on1_meeting_hours", "last_attended_1on1", "days_since_last_1on1",
+                 "attended_group_meetings"]]
+            .rename(columns={
+                "faculty_leader": "Faculty Leader",
+                "tutor": "Tutor",
+                "tutor_type": "Type",
+                "1on1_meeting_count": "1:1 Count",
+                "1on1_meeting_hours": "1:1 Hours",
+                "last_attended_1on1": "Last 1:1",
+                "days_since_last_1on1": "Days Since",
+                "attended_group_meetings": "Group Mtgs",
+            })
+            .sort_values(["Faculty Leader", "Days Since"], ascending=[True, False])
+        )
+        mtg_display["Last 1:1"] = mtg_display["Last 1:1"].dt.strftime("%Y-%m-%d")
+
+        mtg_search = st.text_input("🔍 Search tutor", placeholder="Type to filter...", key="mtg_search")
+        if mtg_search:
+            mtg_display = mtg_display[mtg_display["Tutor"].str.contains(mtg_search, case=False, na=False)]
+
+        st.dataframe(mtg_display, hide_index=True, use_container_width=True,
+                     height=min(600, len(mtg_display) * 35 + 60))
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # TAB 6 — FULL ROSTER
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     with tab_roster:
         st.markdown(
