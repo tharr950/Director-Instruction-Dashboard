@@ -10,6 +10,7 @@ import numpy as np
 import psycopg2
 import plotly.graph_objects as go
 from datetime import date
+import os
 
 
 def render_app(config):
@@ -269,11 +270,20 @@ def render_app(config):
         ).dt.days
         return df
 
+    @st.cache_data(ttl=3600)
+    def load_dashboard_metrics():
+        file = "Dashboard_Metrics.xlsx"
+        if os.path.exists(file):
+            return pd.read_excel(file, sheet_name="MonthlyMetricFullData", header=3)
+        return pd.DataFrame()
+
+
     # ── Load data ─────────────────────────────────────────────────────────────
     try:
         df = load_team_data()
         df_meetings = load_meeting_data()
         df_restricted = load_restricted_data()
+        df_kpi = load_dashboard_metrics()
     except Exception as e:
         st.error(f"Could not connect to Redshift: {e}")
         st.stop()
@@ -303,6 +313,7 @@ def render_app(config):
             "🔀 BUC / PT Split",
             "🚫 Restricted Status",
             "📅 Meetings",
+            "📈 KPI Comparison",
             "📋 Full Roster",
         ]
         page = st.radio("📂 Navigation", _page_options, index=0)
@@ -868,6 +879,106 @@ def render_app(config):
 
         st.dataframe(mtg_display, hide_index=True, use_container_width=True,
                      height=min(600, len(mtg_display) * 35 + 60))
+
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAGE — KPI COMPARISON
+    # ══════════════════════════════════════════════════════════════════════════
+    elif page == "📈 KPI Comparison":
+        st.markdown(
+            "<p class='section-label'>Performance</p>"
+            "<p class='section-title'>Team KPI Comparison</p>",
+            unsafe_allow_html=True,
+        )
+
+        if df_kpi.empty:
+            st.warning("Dashboard_Metrics.xlsx not found or empty.")
+        else:
+            import plotly.express as px
+
+            # Filter out excluded teams
+            kpi = df_kpi[~df_kpi["Faculty Leader Name"].isin(excluded_managers)].copy()
+
+            metrics = [
+                "% to Delivery Target",
+                "% to Availability Target",
+                "Prep Time %",
+                "% Parents Updates Done on Time",
+                "% Sessions on Time",
+                "% of Active Students with Progress Updates Completed",
+            ]
+
+            # Team-level averages
+            leader_group = kpi.groupby("Faculty Leader Name")[metrics].mean().reset_index()
+
+            # Summary KPIs across all teams
+            st.markdown(
+                "<p class='section-label'>Overall Averages</p>",
+                unsafe_allow_html=True,
+            )
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Avg Delivery %", f"{kpi['% to Delivery Target'].mean()*100:.1f}%")
+            k2.metric("Avg Availability %", f"{kpi['% to Availability Target'].mean()*100:.1f}%")
+            k3.metric("Avg On-Time %", f"{kpi['% Sessions on Time'].mean()*100:.1f}%")
+            k4, k5, k6 = st.columns(3)
+            k4.metric("Avg Parent Updates %", f"{kpi['% Parents Updates Done on Time'].mean()*100:.1f}%")
+            k5.metric("Avg Prep Time %", f"{kpi['Prep Time %'].mean()*100:.1f}%")
+            k6.metric("Avg Progress Updates %", f"{kpi['% of Active Students with Progress Updates Completed'].mean()*100:.1f}%")
+
+            st.markdown("")
+            st.markdown("")
+
+            # Bar chart per metric — all teams compared
+            for metric in metrics:
+                plot_df = leader_group[["Faculty Leader Name", metric]].copy()
+                plot_df[metric + "_pct"] = plot_df[metric] * 100
+                plot_df = plot_df.sort_values(metric + "_pct", ascending=False)
+
+                fig = go.Figure()
+                fig.add_trace(go.Bar(
+                    x=plot_df["Faculty Leader Name"],
+                    y=plot_df[metric + "_pct"],
+                    marker_color="#3b82f6",
+                    text=plot_df[metric + "_pct"].apply(lambda x: f"{x:.1f}%"),
+                    textposition="outside",
+                    textfont=dict(size=12),
+                ))
+
+                y_max = 130 if metric == "% to Availability Target" else 110
+                fig.update_layout(
+                    title=dict(text=metric, font=dict(size=14, color="#1e293b"),
+                               x=0.5, xanchor="center"),
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(family="DM Sans", color="#475569"),
+                    margin=dict(l=40, r=20, t=50, b=60),
+                    xaxis=dict(tickangle=-30, gridcolor="rgba(226,232,240,0.8)"),
+                    yaxis=dict(gridcolor="rgba(226,232,240,0.8)",
+                               range=[0, y_max], ticksuffix="%"),
+                    height=400,
+                    showlegend=False,
+                )
+
+                col1, col2, col3 = st.columns([0.5, 4, 0.5])
+                with col2:
+                    st.plotly_chart(fig, use_container_width=True)
+
+                st.markdown("")
+
+            # Full KPI table
+            st.markdown(
+                "<p class='section-label'>Detail</p>"
+                "<p class='section-title'>Team KPI Averages</p>",
+                unsafe_allow_html=True,
+            )
+
+            kpi_table = leader_group.copy()
+            kpi_table.columns = ["Faculty Leader"] + metrics
+            for m in metrics:
+                kpi_table[m] = (kpi_table[m] * 100).round(1)
+            kpi_table = kpi_table.sort_values("Faculty Leader")
+
+            st.dataframe(kpi_table, hide_index=True, use_container_width=True)
 
     # ══════════════════════════════════════════════════════════════════════════
     # PAGE — FULL ROSTER
