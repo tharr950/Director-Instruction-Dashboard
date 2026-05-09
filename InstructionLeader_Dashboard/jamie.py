@@ -95,64 +95,89 @@ def render_app(config):
         return df
 
     @st.cache_data(ttl=3600)
+    @st.cache_data(ttl=3600)
     def load_meeting_data():
-        query = """
+        today = date.today()
+        day_end = today.strftime("%Y-%m-%d")
+        day_start = (today - pd.DateOffset(years=2)).strftime("%Y-%m-%d")
+        query = f"""
         WITH time_period AS (
-          SELECT '2026-01-01'::date AS day_start, '2026-04-30'::date AS day_end
+          SELECT '{day_start}'::date AS day_start, '{day_end}'::date AS day_end
         ),
         cte_group_meetings AS (
-            SELECT s.supervisor_id as fl_id, e_tutor.id as tutor_id,
-                   count(distinct s.id) as attended_group_meetings
+            SELECT e_tutor.id as tutor_id,
+                   count(distinct s.id) as attended_meetings
             FROM dw.courses c
                 JOIN dw.sessions s ON s.course_id = c.id
                 JOIN dw.attendances a ON s.id = a.session_id
                 JOIN dw.enrollments e ON e.id = a.enrollment_id
                 JOIN dw.employees e_tutor ON e.enrollee_id = e_tutor.id
+                LEFT JOIN dw.users tutor ON e_tutor.user_id = tutor.id
             WHERE c.brand_id = 24 AND a.attended IS TRUE
                 AND s.starts_at BETWEEN (SELECT day_start FROM time_period)
                     AND (SELECT day_end FROM time_period)
-            GROUP BY fl_id, tutor_id
+            GROUP BY tutor_id
+        ),
+        cte_1on1_meetings AS (
+            SELECT s.supervisor_id as fl_id, e_tutor.id as tutor_id,
+                   count(distinct s.id) as attended_meetings,
+                   sum(s.duration)/60.0 as meeting_hours,
+                   max(s.starts_at) as last_attended_1on1
+            FROM dw.courses c
+                JOIN dw.sessions s ON s.course_id = c.id
+                JOIN dw.attendances a ON s.id = a.session_id
+                JOIN dw.enrollments e ON e.id = a.enrollment_id
+                JOIN dw.employees e_tutor ON e.enrollee_id = e_tutor.id
+            WHERE c.brand_id = 25
+                AND s.starts_at BETWEEN (SELECT day_start FROM time_period)
+                    AND (SELECT day_end FROM time_period)
+                AND a.attended IS TRUE
+            GROUP BY s.supervisor_id, e_tutor.id
         )
         SELECT
             fl.first_name||' '||fl.last_name as faculty_leader,
             tutor.first_name||' '||tutor.last_name as tutor,
             CASE WHEN e_tutor.delivery_target < 30 THEN 'Adjunct' ELSE 'Professional' END AS tutor_type,
             e_tutor.hire_date,
-            count(distinct s.id) as "1on1_meeting_count",
-            sum(s.duration)/60.0 as "1on1_meeting_hours",
-            max(s.starts_at) as last_attended_1on1,
-            cte_group_meetings.attended_group_meetings
-        FROM dw.courses c
-            JOIN dw.sessions s ON s.course_id = c.id
-            JOIN dw.employees e_fl ON e_fl.id = s.supervisor_id
-            JOIN dw.users fl ON e_fl.user_id = fl.id
-            JOIN dw.attendances a ON s.id = a.session_id
-            JOIN dw.enrollments e ON e.id = a.enrollment_id
-            JOIN dw.employees e_tutor ON e.enrollee_id = e_tutor.id
+            cte_1on1_meetings.attended_meetings AS attended_1on1_meetings,
+            cte_1on1_meetings.meeting_hours AS "1on1_meeting_hours",
+            cte_1on1_meetings.last_attended_1on1,
+            cte_group_meetings.attended_meetings AS attended_group_meetings
+        FROM dw.employees e_tutor
             LEFT JOIN dw.users tutor ON e_tutor.user_id = tutor.id
+            JOIN dw.team_members ON e_tutor.id = team_members.member_id
+            JOIN dw.teams ON team_members.team_id = teams.id
+            JOIN dw.employees e_fl ON e_fl.id = teams.manager_id
+            JOIN dw.users fl ON e_fl.user_id = fl.id
+            LEFT JOIN cte_1on1_meetings
+                ON (cte_1on1_meetings.fl_id = e_fl.id
+                AND cte_1on1_meetings.tutor_id = e_tutor.id)
             LEFT JOIN cte_group_meetings
-                ON (cte_group_meetings.fl_id = s.supervisor_id
-                AND cte_group_meetings.tutor_id = e_tutor.id)
-        WHERE c.brand_id = 25 AND s.attendances_attended_count = 1
-            AND s.starts_at BETWEEN (SELECT day_start FROM time_period)
-                    AND (SELECT day_end FROM time_period)
-            AND a.attended IS TRUE
-        GROUP BY faculty_leader, tutor, e_tutor.hire_date,
-                 cte_group_meetings.attended_group_meetings, e_tutor.delivery_target
-        ORDER BY 1
+                ON cte_group_meetings.tutor_id = e_tutor.id
+        WHERE e_tutor.end_date IS NULL
+            AND e_tutor.delivery_target > 0
+            AND e_tutor.type = 'Tutor'
+            AND e_tutor.tier_id >= 1
+            AND tutor.title = 'Tutor'
         """
         conn = get_redshift_connection()
         df = pd.read_sql(query, conn)
         df["hire_date"] = pd.to_datetime(df["hire_date"])
         df["last_attended_1on1"] = pd.to_datetime(df["last_attended_1on1"])
-        df["1on1_meeting_hours"] = df["1on1_meeting_hours"].astype(float).round(1)
+        df["1on1_meeting_hours"] = pd.to_numeric(df["1on1_meeting_hours"], errors="coerce").round(1)
+        df["attended_1on1_meetings"] = df["attended_1on1_meetings"].fillna(0).astype(int)
         df["attended_group_meetings"] = df["attended_group_meetings"].fillna(0).astype(int)
-        df["days_since_last_1on1"] = (pd.Timestamp.now() - df["last_attended_1on1"]).dt.days
+        df["days_since_last_1on1"] = pd.NaT
+        mask = df["last_attended_1on1"].notna()
+        df.loc[mask, "days_since_last_1on1"] = (pd.Timestamp.now() - df.loc[mask, "last_attended_1on1"]).dt.days
         return df
+
 
     @st.cache_data(ttl=3600)
     def load_restricted_data():
-        query = """
+        today = date.today()
+        lookback_start = (today - pd.DateOffset(years=1)).strftime("%Y-%m-%d")
+        query = f"""
         WITH cte_employee_with_histories AS (
             SELECT
                 item_id AS employee_id,
@@ -166,9 +191,7 @@ def render_app(config):
                 AND item_type = 'Employee' AND attr = 'tutor_type'
         ),
         cte_employee_wo_history AS (
-            SELECT
-                id AS employee_id,
-                -1 AS updated_by_employee_id,
+            SELECT id AS employee_id, -1 AS updated_by_employee_id,
                 CASE WHEN employees.tutor_type = 'Restricted' THEN True ELSE False END AS restricted,
                 employees.created_at AS status_starts_at
             FROM dw.employees
@@ -179,57 +202,72 @@ def render_app(config):
             SELECT * FROM cte_employee_with_histories
             UNION
             SELECT * FROM cte_employee_wo_history
+        ),
+        cte_last_restricted AS (
+            SELECT
+                cte_all_histories.employee_id,
+                cte_all_histories.updated_by_employee_id,
+                CASE
+                    WHEN cte_all_histories.employee_id = cte_all_histories.updated_by_employee_id THEN 'Tutor'
+                    WHEN cte_all_histories.updated_by_employee_id = -1 THEN 'Never Changed'
+                    ELSE 'Admin'
+                END AS update_type,
+                cte_all_histories.restricted,
+                cte_all_histories.status_starts_at,
+                CASE
+                    WHEN LAG(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at DESC) IS NULL
+                    THEN NULL
+                    ELSE DATEADD(SECOND, -1, LAG(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at DESC))
+                END AS status_ends_at,
+                DATEDIFF(DAY, status_starts_at, status_ends_at) AS days_in_effect,
+                CASE WHEN LAG(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at DESC) IS NULL
+                    THEN 1 ELSE 0 END AS current_status_flag
+            FROM cte_all_histories
+            GROUP BY cte_all_histories.employee_id, cte_all_histories.updated_by_employee_id,
+                     cte_all_histories.restricted, cte_all_histories.status_starts_at
         )
         SELECT
-            cte_all_histories.employee_id,
+            cte_last_restricted.employee_id,
             users.first_name || ' ' || users.last_name AS employee_name,
             teams.name AS team,
             tiers.name AS tier,
-            cte_all_histories.updated_by_employee_id,
+            cte_last_restricted.updated_by_employee_id,
             updated_by_users.first_name || ' ' || updated_by_users.last_name AS updated_by_employee_name,
-            CASE
-                WHEN cte_all_histories.employee_id = cte_all_histories.updated_by_employee_id THEN 'Tutor'
-                WHEN cte_all_histories.updated_by_employee_id = -1 THEN 'Never Changed'
-                ELSE 'Admin'
-            END AS update_type,
-            cte_all_histories.restricted,
-            cte_all_histories.status_starts_at,
-            CASE
-                WHEN LAG(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at DESC) IS NULL
-                THEN NULL
-                ELSE DATEADD(SECOND, -1, LAG(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at DESC))
-            END AS status_ends_at,
-            DATEDIFF(DAY, status_starts_at, status_ends_at) AS days_in_effect,
-            CASE WHEN LAG(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at DESC) IS NULL
-                THEN 1 ELSE 0 END AS current_status_flag
-        FROM cte_all_histories
-            JOIN dw.employees ON employees.id = cte_all_histories.employee_id
+            cte_last_restricted.update_type,
+            cte_last_restricted.restricted,
+            cte_last_restricted.status_starts_at,
+            cte_last_restricted.status_ends_at,
+            cte_last_restricted.days_in_effect,
+            cte_last_restricted.current_status_flag
+        FROM cte_last_restricted
+            JOIN dw.employees ON employees.id = cte_last_restricted.employee_id
             JOIN dw.users ON users.id = employees.user_id
             JOIN dw.tiers ON employees.tier_id = tiers.id
             LEFT JOIN dw.employees updated_by_employees
-                ON updated_by_employees.id = cte_all_histories.updated_by_employee_id
+                ON updated_by_employees.id = cte_last_restricted.updated_by_employee_id
             LEFT JOIN dw.users updated_by_users
                 ON updated_by_users.id = updated_by_employees.user_id
             JOIN dw.team_members ON team_members.member_id = employees.id
             JOIN dw.teams ON teams.id = team_members.team_id
-        WHERE 1=1
-        GROUP BY cte_all_histories.employee_id, employee_name, teams.name, tiers.name,
-                 cte_all_histories.updated_by_employee_id, updated_by_employee_name,
-                 cte_all_histories.restricted, cte_all_histories.status_starts_at
-        HAVING restricted = TRUE
-            AND status_starts_at >= '2025-01-01'
+        WHERE cte_last_restricted.restricted IS TRUE
+            AND employees.end_date IS NULL
+        GROUP BY cte_last_restricted.employee_id, employee_name, teams.name, tiers.name,
+                 cte_last_restricted.updated_by_employee_id, updated_by_employee_name,
+                 cte_last_restricted.update_type, cte_last_restricted.restricted,
+                 cte_last_restricted.status_starts_at, cte_last_restricted.status_ends_at,
+                 cte_last_restricted.days_in_effect, cte_last_restricted.current_status_flag
+        HAVING status_starts_at >= '{lookback_start}'
+            OR (status_ends_at IS NULL AND current_status_flag = 1)
+            OR status_ends_at >= '{lookback_start}'
         """
         conn = get_redshift_connection()
         df = pd.read_sql(query, conn)
         df["status_starts_at"] = pd.to_datetime(df["status_starts_at"])
         df["status_ends_at"] = pd.to_datetime(df["status_ends_at"])
-        # For currently restricted tutors, compute days since restriction started
         df.loc[df["current_status_flag"] == 1, "days_in_effect"] = (
             pd.Timestamp.now() - df.loc[df["current_status_flag"] == 1, "status_starts_at"]
         ).dt.days
         return df
-
-
 
     # ── Load data ─────────────────────────────────────────────────────────────
     try:
@@ -722,7 +760,7 @@ def render_app(config):
         mtg = df_meetings[df_meetings["faculty_leader"].isin(selected_managers)].copy()
 
         mm1, mm2, mm3, mm4 = st.columns(4)
-        mm1.metric("Avg 1:1s per Tutor", f"{mtg['1on1_meeting_count'].mean():.1f}")
+        mm1.metric("Avg 1:1s per Tutor", f"{mtg['attended_1on1_meetings'].mean():.1f}")
         mm2.metric("Avg 1:1 Hours", f"{mtg['1on1_meeting_hours'].mean():.1f}")
         mm3.metric("Avg Group Meetings", f"{mtg['attended_group_meetings'].mean():.1f}")
         avg_days = mtg["days_since_last_1on1"].mean()
@@ -734,7 +772,7 @@ def render_app(config):
             mtg.groupby("faculty_leader")
             .agg(
                 tutors=("tutor", "count"),
-                avg_1on1s=("1on1_meeting_count", "mean"),
+                avg_1on1s=("attended_1on1_meetings", "mean"),
                 total_1on1_hrs=("1on1_meeting_hours", "sum"),
                 avg_group=("attended_group_meetings", "mean"),
                 avg_days_since=("days_since_last_1on1", "mean"),
@@ -813,12 +851,12 @@ def render_app(config):
         )
 
         mtg_display = (
-            mtg[["faculty_leader", "tutor", "tutor_type", "1on1_meeting_count",
+            mtg[["faculty_leader", "tutor", "tutor_type", "attended_1on1_meetings",
                  "1on1_meeting_hours", "last_attended_1on1", "days_since_last_1on1",
                  "attended_group_meetings"]]
             .rename(columns={
                 "faculty_leader": "Faculty Leader", "tutor": "Tutor", "tutor_type": "Type",
-                "1on1_meeting_count": "1:1 Count", "1on1_meeting_hours": "1:1 Hours",
+                "attended_1on1_meetings": "1:1 Count", "1on1_meeting_hours": "1:1 Hours",
                 "last_attended_1on1": "Last 1:1", "days_since_last_1on1": "Days Since",
                 "attended_group_meetings": "Group Mtgs",
             })
