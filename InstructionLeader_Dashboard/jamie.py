@@ -167,7 +167,7 @@ def render_app(config):
         df["1on1_meeting_hours"] = pd.to_numeric(df["1on1_meeting_hours"], errors="coerce").round(1)
         df["attended_1on1_meetings"] = df["attended_1on1_meetings"].fillna(0).astype(int)
         df["attended_group_meetings"] = df["attended_group_meetings"].fillna(0).astype(int)
-        df["days_since_last_1on1"] = pd.NaT
+        df["days_since_last_1on1"] = np.nan
         mask = df["last_attended_1on1"].notna()
         df.loc[mask, "days_since_last_1on1"] = (pd.Timestamp.now() - df.loc[mask, "last_attended_1on1"]).dt.days
         return df
