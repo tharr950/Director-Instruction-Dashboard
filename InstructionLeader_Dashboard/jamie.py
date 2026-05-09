@@ -290,8 +290,9 @@ def render_app(config):
         )
         st.divider()
 
-        excluded = ["Katherine Marino", "Nikki Pencak"]
-        selected_managers = [m for m in managers if m not in excluded]
+        excluded_managers = ["Katherine Marino", "Nikki Pencak"]
+        excluded_teams = ["Team Marino", "Team Pencak"]
+        selected_managers = [m for m in managers if m not in excluded_managers]
 
         st.divider()
 
@@ -320,6 +321,7 @@ def render_app(config):
 
     # Filter
     filt = df[df["manager"].isin(selected_managers)].copy()
+    df_restricted = df_restricted[~df_restricted["team"].isin(excluded_teams)]
 
     # ── Top-level metrics ─────────────────────────────────────────────────────
     st.markdown(
