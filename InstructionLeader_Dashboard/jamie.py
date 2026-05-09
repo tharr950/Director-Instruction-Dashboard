@@ -290,12 +290,8 @@ def render_app(config):
         )
         st.divider()
 
-        selected_managers = st.multiselect(
-            "Filter by Faculty Leader",
-            options=managers,
-            default=managers,
-            help="Select one or more FLs to compare",
-        )
+        excluded = ["Katherine Marino", "Nikki Pencak"]
+        selected_managers = [m for m in managers if m not in excluded]
 
         st.divider()
 
