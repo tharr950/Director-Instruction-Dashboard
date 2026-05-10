@@ -48,13 +48,14 @@ def render_app(config):
     """, unsafe_allow_html=True)
 
     # ── Redshift connection ──────────────────────────────────────────────────
-    @st.cache_resource
     def get_redshift_connection():
         creds = st.secrets["redshift"]
-        return psycopg2.connect(
-            host=creds["host"], port=int(creds["port"]),
-            dbname=creds["database"], user=creds["user"], password=creds["password"],
-        )
+        if "rs_conn" not in st.session_state or st.session_state.rs_conn.closed:
+            st.session_state.rs_conn = psycopg2.connect(
+                host=creds["host"], port=int(creds["port"]),
+                dbname=creds["database"], user=creds["user"], password=creds["password"],
+            )
+        return st.session_state.rs_conn
 
     @st.cache_data(ttl=3600)
     def load_team_data():
