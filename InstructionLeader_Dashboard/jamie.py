@@ -424,6 +424,81 @@ def render_app(config):
                 )
             st.markdown("</div>", unsafe_allow_html=True)
 
+    # ── Exam Pacing Alert ─────────────────────────────────────────────────────
+    if not df_sg.empty and not df_sg_sessions.empty and not df_sg_exams.empty:
+        sg_pace = df_sg.copy()
+        for col in ["first_test_prep_session", "won_at"]:
+            if col in sg_pace.columns:
+                sg_pace[col] = pd.to_datetime(sg_pace[col], errors="coerce")
+        for col in ["package_hours", "completed_test_prep_hours"]:
+            if col in sg_pace.columns:
+                sg_pace[col] = pd.to_numeric(sg_pace[col], errors="coerce")
+
+        behind_on_exams = []
+        for _, row in sg_pace.iterrows():
+            sid = row["student_id"]
+            pkg_hrs = row["package_hours"]
+            if pd.isna(pkg_hrs) or pd.isna(row.get("first_test_prep_session")):
+                continue
+
+            # Determine required total practice tests and milestones
+            if pkg_hrs <= 24:
+                required_total = 4
+                num_milestones = 4
+            else:
+                required_total = 4 + int((pkg_hrs - 24) / 6)
+                num_milestones = required_total
+
+            # Calculate milestone hours (evenly spaced through the program)
+            milestone_hours = [(pkg_hrs / num_milestones) * (i + 1) for i in range(num_milestones)]
+
+            # How many hours completed so far
+            completed = row["completed_test_prep_hours"] if pd.notna(row.get("completed_test_prep_hours")) else 0
+
+            # How many exams should they have by now based on hours completed
+            exams_expected = 0
+            for mh in milestone_hours:
+                if completed >= mh:
+                    exams_expected += 1
+
+            # How many practice exams taken after tutoring started
+            exams_taken = 0
+            if not df_sg_exams.empty and sid in df_sg_exams["student_id"].values:
+                stu_exams = df_sg_exams[df_sg_exams["student_id"] == sid]
+                exams_taken = len(stu_exams[stu_exams["before_or_after_tutoring"] == "after"])
+
+            if exams_expected > 0 and exams_taken < exams_expected:
+                behind_on_exams.append({
+                    "student": row.get("student", "Unknown"),
+                    "advisor": row.get("advisor", "Unknown"),
+                    "tutor": row.get("tutor", "Unknown"),
+                    "pkg_hrs": pkg_hrs,
+                    "completed": completed,
+                    "exams_taken": exams_taken,
+                    "exams_expected": exams_expected,
+                    "required_total": required_total,
+                })
+
+        if len(behind_on_exams) > 0:
+            st.markdown(
+                "<div style='background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:16px 20px; margin-bottom:16px;'>"
+                "<p style='color:#92400e; font-weight:600; font-size:0.85rem; margin:0 0 8px 0;'>"
+                "⚠️ EXAM PACING ALERT — Students behind on practice tests</p>",
+                unsafe_allow_html=True,
+            )
+            for b in behind_on_exams:
+                st.markdown(
+                    f"<p style='color:#92400e; margin:2px 0; font-size:0.85rem;'>"
+                    f"&nbsp;&nbsp;&nbsp;&nbsp;• <b>{b['student']}</b> — "
+                    f"Advisor: {b['advisor']} — "
+                    f"Tutor: {b['tutor']} — "
+                    f"{b['exams_taken']}/{b['exams_expected']} exams taken "
+                    f"({b['completed']:.0f}/{b['pkg_hrs']:.0f} hrs completed, "
+                    f"{b['required_total']} total required)</p>",
+                    unsafe_allow_html=True,
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
+
     st.markdown("")
 
     # ══════════════════════════════════════════════════════════════════════════
