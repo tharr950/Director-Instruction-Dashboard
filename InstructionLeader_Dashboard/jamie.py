@@ -1238,6 +1238,119 @@ def render_app(config):
             st.dataframe(matrix, hide_index=True, use_container_width=True,
                          height=min(700, len(matrix) * 35 + 60))
 
+            # ── Student Detail Drilldown ──────────────────────────────────────
+            st.markdown("")
+            st.markdown(
+                "<p class='section-label'>Drilldown</p>"
+                "<p class='section-title'>Student Detail</p>",
+                unsafe_allow_html=True,
+            )
+
+            student_names = sorted(sg["student"].dropna().unique())
+            selected_student = st.selectbox("Select a student:", student_names, key="sg_student_select")
+
+            if selected_student:
+                stu_row = sg[sg["student"] == selected_student].iloc[0]
+                sid = stu_row["student_id"]
+
+                # Package info
+                st.markdown("---")
+                st.markdown(f"### {selected_student}")
+                p1, p2, p3, p4 = st.columns(4)
+                p1.metric("Tutor", stu_row.get("tutor", "—") or "—")
+                p2.metric("Advisor", stu_row.get("advisor", "—") or "—")
+                p3.metric("Package Hours", f"{stu_row['package_hours']:.0f}" if pd.notna(stu_row.get("package_hours")) else "—")
+                p4.metric("Won Date", stu_row["won_at"].strftime("%Y-%m-%d") if pd.notna(stu_row.get("won_at")) else "—")
+
+                p5, p6, p7, p8 = st.columns(4)
+                p5.metric("Completed Hours", f"{stu_row['completed_test_prep_hours']:.1f}" if pd.notna(stu_row.get("completed_test_prep_hours")) else "—")
+                p6.metric("Starting Score", f"{stu_row['starting_score']:.0f}" if pd.notna(stu_row.get("starting_score")) else "—")
+                p7.metric("Latest Score", f"{stu_row['latest_test_score']:.0f}" if pd.notna(stu_row.get("latest_test_score")) else "—")
+                score_ch = stu_row.get("score_change")
+                p8.metric("Score Change", f"{score_ch:+.0f}" if pd.notna(score_ch) else "—")
+
+                # Compliance summary for this student
+                stu_comp = comp_df[comp_df["student_id"] == sid]
+                if len(stu_comp) > 0:
+                    sc = stu_comp.iloc[0]
+                    st.markdown("")
+                    st.markdown("**Compliance Status:**")
+
+                    def check_line(label, passed, detail=""):
+                        icon = "✅" if passed is True else ("❌" if passed is False else "⚪")
+                        return f"{icon} **{label}** {detail}"
+
+                    lines = []
+                    lines.append(check_line("Package ≥ 20 hours", sc.get("1_pkg_20hrs"),
+                        f"— {sc.get('package_hours', 0):.0f} hours" if pd.notna(sc.get("package_hours")) else ""))
+                    lines.append(check_line("Used full package hours", sc.get("2_hours_used"),
+                        f"— {sc.get('completed_hours', 0):.1f} / {sc.get('package_hours', 0):.0f} hrs" if pd.notna(sc.get("completed_hours")) else ""))
+                    lines.append(check_line("Pace 1-2 hrs/week", sc.get("3_pace_ok"),
+                        f"— {sc.get('3_pace_val', 0):.1f} hrs/wk" if pd.notna(sc.get("3_pace_val")) else ""))
+                    lines.append(check_line("Baseline score before first session", sc.get("4_baseline")))
+                    lines.append(check_line("100% session attendance", sc.get("5_attendance"),
+                        f"— {int(sc.get('5_attended', 0))}/{int(sc.get('5_total', 0))} attended" if pd.notna(sc.get("5_attended")) else ""))
+                    lines.append("⚪ **Homework completion** — not yet tracked")
+                    lines.append(check_line(f"Minimum practice tests", sc.get("7_practice_tests"),
+                        f"— {int(sc.get('7_taken', 0))}/{int(sc.get('7_required', 0))} taken" if pd.notna(sc.get("7_taken")) else ""))
+                    lines.append(check_line("≥ 1 week between practice tests", sc.get("8_week_gaps"),
+                        f"— min gap {int(sc.get('8_min_gap'))} days" if pd.notna(sc.get("8_min_gap")) else ""))
+                    lines.append(check_line("Official exam within 14 days of last session", sc.get("9_final_14days"),
+                        f"— {int(sc.get('9_days_after'))} days after" if pd.notna(sc.get("9_days_after")) else ""))
+
+                    for line in lines:
+                        st.markdown(line)
+
+                # Sessions table
+                st.markdown("")
+                st.markdown("**Sessions:**")
+                if not df_sg_sessions.empty and sid in df_sg_sessions["student_id"].values:
+                    stu_sess = df_sg_sessions[df_sg_sessions["student_id"] == sid].copy()
+                    stu_sess["starts_at"] = pd.to_datetime(stu_sess["starts_at"], errors="coerce")
+                    stu_sess = stu_sess.sort_values("starts_at")
+                    sess_display = stu_sess[["starts_at", "session_hours", "attended", "tutor"]].copy()
+                    sess_display["starts_at"] = sess_display["starts_at"].dt.strftime("%Y-%m-%d %I:%M %p")
+                    sess_display["attended"] = sess_display["attended"].apply(lambda x: "✅" if x == 1 else "❌")
+                    sess_display["session_hours"] = sess_display["session_hours"].round(2)
+                    sess_display = sess_display.rename(columns={
+                        "starts_at": "Date", "session_hours": "Hours",
+                        "attended": "Attended", "tutor": "Tutor",
+                    })
+                    st.dataframe(sess_display, hide_index=True, use_container_width=True)
+
+                    st.markdown(f"**Total sessions:** {len(stu_sess)} | "
+                                f"**Total hours:** {stu_sess['session_hours'].sum():.1f} | "
+                                f"**Attended:** {int(stu_sess['attended'].sum())}/{len(stu_sess)}")
+                else:
+                    st.info("No session data available for this student.")
+
+                # Exams table
+                st.markdown("")
+                st.markdown("**Exams:**")
+                if not df_sg_exams.empty and sid in df_sg_exams["student_id"].values:
+                    stu_exams = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
+                    stu_exams["exam_date"] = pd.to_datetime(stu_exams["exam_date"], errors="coerce")
+                    stu_exams = stu_exams.sort_values("exam_date")
+                    stu_exams["score"] = pd.to_numeric(stu_exams["score"], errors="coerce")
+
+                    # Calculate gaps between exams
+                    stu_exams["days_since_prev"] = stu_exams["exam_date"].diff().dt.days
+
+                    exam_display = stu_exams[["exam_date", "exam_type", "exam_code", "score",
+                                              "before_or_after_tutoring", "source", "days_since_prev"]].copy()
+                    exam_display["exam_date"] = exam_display["exam_date"].dt.strftime("%Y-%m-%d")
+                    exam_display["score"] = exam_display["score"].apply(lambda x: f"{x:.0f}" if pd.notna(x) else "—")
+                    exam_display["days_since_prev"] = exam_display["days_since_prev"].apply(
+                        lambda x: f"{int(x)}d" if pd.notna(x) else "—")
+                    exam_display = exam_display.rename(columns={
+                        "exam_date": "Date", "exam_type": "Type", "exam_code": "Code",
+                        "score": "Score", "before_or_after_tutoring": "Timing",
+                        "source": "Source", "days_since_prev": "Gap",
+                    })
+                    st.dataframe(exam_display, hide_index=True, use_container_width=True)
+                else:
+                    st.info("No exam data available for this student.")
+
             # ── Score improvement chart ───────────────────────────────────────
             has_scores = comp_df.dropna(subset=["starting_score", "latest_score"])
             if len(has_scores) > 0:
