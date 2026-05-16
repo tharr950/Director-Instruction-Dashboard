@@ -1147,20 +1147,25 @@ def render_app(config):
                     checks["8_min_gap"] = None
 
                 # 9. Official exam within 14 days of last session
-                if not df_sg_sessions.empty and sid in df_sg_sessions["student_id"].values:
-                    stu_sess = df_sg_sessions[df_sg_sessions["student_id"] == sid].copy()
-                    stu_sess["starts_at"] = pd.to_datetime(stu_sess["starts_at"], errors="coerce")
-                    last_session = stu_sess["starts_at"].max()
-                    if pd.notna(row["last_test_taken"]) and pd.notna(last_session):
-                        days_after = (row["last_test_taken"] - last_session).days
-                        checks["9_final_14days"] = 0 <= days_after <= 14
-                        checks["9_days_after"] = int(days_after)
-                    else:
-                        checks["9_final_14days"] = None
-                        checks["9_days_after"] = None
-                else:
-                    checks["9_final_14days"] = None
-                    checks["9_days_after"] = None
+                #    Only counts "Official Exam" in exam_code, taken after all tutoring hours complete
+                checks["9_final_14days"] = None
+                checks["9_days_after"] = None
+                if not df_sg_exams.empty and sid in df_sg_exams["student_id"].values:
+                    stu_exams_all = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
+                    stu_exams_all["exam_date"] = pd.to_datetime(stu_exams_all["exam_date"], errors="coerce")
+                    official_after = stu_exams_all[
+                        (stu_exams_all["exam_code"] == "Official Exam")
+                        & (stu_exams_all["before_or_after_tutoring"] == "after")
+                    ]
+                    if len(official_after) > 0 and not df_sg_sessions.empty and sid in df_sg_sessions["student_id"].values:
+                        stu_sess_9 = df_sg_sessions[df_sg_sessions["student_id"] == sid].copy()
+                        stu_sess_9["starts_at"] = pd.to_datetime(stu_sess_9["starts_at"], errors="coerce")
+                        last_session = stu_sess_9["starts_at"].max()
+                        official_date = official_after["exam_date"].max()
+                        if pd.notna(official_date) and pd.notna(last_session):
+                            days_after = (official_date - last_session).days
+                            checks["9_final_14days"] = 0 <= days_after <= 14
+                            checks["9_days_after"] = int(days_after)
 
                 checks["student_id"] = sid
                 checks["student"] = row.get("student", "")
@@ -1227,7 +1232,7 @@ def render_app(config):
                 lambda r: f"{status_icon(r['8_week_gaps'])} (min {int(r['8_min_gap'])}d)" if pd.notna(r.get("8_min_gap")) else status_icon(r["8_week_gaps"]), axis=1
             )
             matrix["Final ≤14d"] = comp_df.apply(
-                lambda r: f"{status_icon(r['9_final_14days'])} ({int(r['9_days_after'])}d)" if pd.notna(r.get("9_days_after")) else status_icon(r["9_final_14days"]), axis=1
+                lambda r: f"{status_icon(r['9_final_14days'])} ({int(r['9_days_after'])}d)" if pd.notna(r.get("9_days_after")) else "—", axis=1
             )
             matrix["Score"] = comp_df.apply(
                 lambda r: f"{r['starting_score']:.0f}→{r['latest_score']:.0f} ({r['score_change']:+.0f})"
@@ -1296,7 +1301,7 @@ def render_app(config):
                     lines.append(check_line("≥ 1 week between practice tests", sc.get("8_week_gaps"),
                         f"— min gap {int(sc.get('8_min_gap'))} days" if pd.notna(sc.get("8_min_gap")) else ""))
                     lines.append(check_line("Official exam within 14 days of last session", sc.get("9_final_14days"),
-                        f"— {int(sc.get('9_days_after'))} days after" if pd.notna(sc.get("9_days_after")) else ""))
+                        f"— {int(sc.get('9_days_after'))} days after last session" if pd.notna(sc.get("9_days_after")) else "— no official exam taken yet"))
 
                     for line in lines:
                         st.markdown(line)
