@@ -1134,10 +1134,10 @@ def render_app(config):
                     if len(after_exams) >= 2:
                         exam_dates = after_exams["exam_date"].dropna().sort_values().reset_index(drop=True)
                         gaps = exam_dates.diff().dt.days.dropna()
-                        checks["8_week_gaps"] = bool((gaps >= 7).all()) if len(gaps) > 0 else True
+                        checks["8_week_gaps"] = bool((gaps >= 7).all()) if len(gaps) > 0 else None
                         checks["8_min_gap"] = int(gaps.min()) if len(gaps) > 0 else None
                     else:
-                        checks["8_week_gaps"] = True if len(after_exams) <= 1 else None
+                        checks["8_week_gaps"] = None
                         checks["8_min_gap"] = None
                 else:
                     checks["7_practice_tests"] = None
@@ -1216,12 +1216,18 @@ def render_app(config):
                 return "—"
 
             matrix = comp_df[["student", "tutor", "advisor"]].copy()
-            matrix["Pkg ≥20hr"] = comp_df["1_pkg_20hrs"].apply(status_icon)
-            matrix["Hrs Used"] = comp_df["2_hours_used"].apply(status_icon)
+            matrix["Pkg ≥20hr"] = comp_df.apply(
+                lambda r: f"{status_icon(r['1_pkg_20hrs'])} {r['package_hours']:.0f}hr" if pd.notna(r.get("package_hours")) else "—", axis=1
+            )
+            matrix["Hrs Used"] = comp_df.apply(
+                lambda r: f"{status_icon(r['2_hours_used'])} {r['completed_hours']:.1f}/{r['package_hours']:.0f}" if pd.notna(r.get("completed_hours")) and pd.notna(r.get("package_hours")) else "—", axis=1
+            )
             matrix["Pace"] = comp_df.apply(
                 lambda r: f"{status_icon(r['3_pace_ok'])} ({r['3_pace_val']:.1f}/wk)" if pd.notna(r.get("3_pace_val")) else status_icon(r["3_pace_ok"]), axis=1
             )
-            matrix["Baseline"] = comp_df["4_baseline"].apply(status_icon)
+            matrix["Baseline"] = comp_df.apply(
+                lambda r: f"{status_icon(r['4_baseline'])} {r['starting_score']:.0f}" if pd.notna(r.get("starting_score")) else f"{status_icon(r['4_baseline'])}", axis=1
+            )
             matrix["Attend"] = comp_df.apply(
                 lambda r: f"{status_icon(r['5_attendance'])} ({int(r['5_attended'])}/{int(r['5_total'])})" if pd.notna(r.get("5_attended")) else "—", axis=1
             )
