@@ -1344,6 +1344,27 @@ def render_app(config):
                 unsafe_allow_html=True,
             )
 
+            # Filters
+            fc1, fc2, fc3 = st.columns(3)
+            with fc1:
+                sg_students = sorted(comp_df["student"].dropna().unique())
+                sel_students = st.multiselect("Filter by Student", sg_students, key="sg_filter_student")
+            with fc2:
+                sg_tutors = sorted(comp_df["tutor"].dropna().unique())
+                sel_tutors = st.multiselect("Filter by Tutor", sg_tutors, key="sg_filter_tutor")
+            with fc3:
+                sg_advisors = sorted(comp_df["advisor"].dropna().unique())
+                sel_advisors = st.multiselect("Filter by Advisor", sg_advisors, key="sg_filter_advisor")
+
+            filtered_comp = comp_df.copy()
+            if sel_students:
+                filtered_comp = filtered_comp[filtered_comp["student"].isin(sel_students)]
+            if sel_tutors:
+                filtered_comp = filtered_comp[filtered_comp["tutor"].isin(sel_tutors)]
+            if sel_advisors:
+                filtered_comp = filtered_comp[filtered_comp["advisor"].isin(sel_advisors)]
+            filtered_comp = filtered_comp.sort_values("student")
+
             def status_icon(val):
                 if val is True:
                     return "✅"
@@ -1351,32 +1372,32 @@ def render_app(config):
                     return "❌"
                 return "—"
 
-            matrix = comp_df[["student", "tutor", "advisor"]].copy()
-            matrix["Pkg ≥20hr"] = comp_df.apply(
+            matrix = filtered_comp[["student", "tutor", "advisor"]].copy()
+            matrix["Pkg ≥20hr"] = filtered_comp.apply(
                 lambda r: f"{status_icon(r['1_pkg_20hrs'])} {r['package_hours']:.0f}hr" if pd.notna(r.get("package_hours")) else "—", axis=1
             )
-            matrix["Hrs Used"] = comp_df.apply(
+            matrix["Hrs Used"] = filtered_comp.apply(
                 lambda r: f"{status_icon(r['2_hours_used'])} {r['completed_hours']:.1f}/{r['package_hours']:.0f}" if pd.notna(r.get("completed_hours")) and pd.notna(r.get("package_hours")) else "—", axis=1
             )
-            matrix["Pace"] = comp_df.apply(
+            matrix["Pace"] = filtered_comp.apply(
                 lambda r: f"{status_icon(r['3_pace_ok'])} ({r['3_pace_val']:.1f}/wk)" if pd.notna(r.get("3_pace_val")) else status_icon(r["3_pace_ok"]), axis=1
             )
-            matrix["Baseline"] = comp_df.apply(
+            matrix["Baseline"] = filtered_comp.apply(
                 lambda r: f"{status_icon(r['4_baseline'])} {r['starting_score']:.0f}" if pd.notna(r.get("starting_score")) else f"{status_icon(r['4_baseline'])}", axis=1
             )
-            matrix["Attend"] = comp_df.apply(
+            matrix["Attend"] = filtered_comp.apply(
                 lambda r: f"{status_icon(r['5_attendance'])} ({int(r['5_attended'])}/{int(r['5_total'])})" if pd.notna(r.get("5_attended")) else "—", axis=1
             )
-            matrix["Tests"] = comp_df.apply(
+            matrix["Tests"] = filtered_comp.apply(
                 lambda r: f"{status_icon(r['7_practice_tests'])} ({int(r['7_taken'])}/{int(r['7_required'])})" if pd.notna(r.get("7_taken")) else "—", axis=1
             )
-            matrix["Gaps ≥7d"] = comp_df.apply(
+            matrix["Gaps ≥7d"] = filtered_comp.apply(
                 lambda r: f"{status_icon(r['8_week_gaps'])} (min {int(r['8_min_gap'])}d)" if pd.notna(r.get("8_min_gap")) else status_icon(r["8_week_gaps"]), axis=1
             )
-            matrix["Final ≤14d"] = comp_df.apply(
+            matrix["Final ≤14d"] = filtered_comp.apply(
                 lambda r: f"{status_icon(r['9_final_14days'])} ({int(r['9_days_after'])}d)" if pd.notna(r.get("9_days_after")) else "—", axis=1
             )
-            matrix["Score"] = comp_df.apply(
+            matrix["Score"] = filtered_comp.apply(
                 lambda r: f"{r['starting_score']:.0f}→{r['latest_score']:.0f} ({r['score_change']:+.0f})"
                 if pd.notna(r.get("starting_score")) and pd.notna(r.get("latest_score")) else "—", axis=1
             )
