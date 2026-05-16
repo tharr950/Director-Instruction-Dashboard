@@ -250,9 +250,201 @@ def push_to_github(df):
         print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] Created new file.")
 
 
+
+SESSIONS_QUERY = """
+WITH cte_score_guarantee AS (
+    SELECT
+        tp.student_id,
+        courses.id AS course_id,
+        DATE(tp.won_at) AS won_at,
+        tp.duration/60.0 AS package_hours
+    FROM orbit_production.tutor_packages tp
+        JOIN orbit_production.students ON tp.student_id = students.id
+        JOIN orbit_production.enrollments e ON e.enrollee_id = students.id
+        JOIN orbit_production.courses ON e.course_id = courses.id
+    WHERE tp.name LIKE '%%Score Guarantee%%'
+        AND tp.status = 'won'
+        AND courses.brand_id = 2
+    GROUP BY tp.student_id, courses.id, tp.won_at, tp.duration
+)
+SELECT
+    cte_score_guarantee.student_id,
+    cte_score_guarantee.course_id,
+    sessions.id AS session_id,
+    sessions.starts_at,
+    IFNULL(SUM(sa.minutes), 0)/60.0 AS session_hours,
+    sessions.attendances_attended_count AS attended,
+    CONCAT(tutor_users.first_name, ' ', tutor_users.last_name) AS tutor
+FROM cte_score_guarantee
+    JOIN orbit_production.sessions
+        ON (sessions.course_id = cte_score_guarantee.course_id
+        AND sessions.starts_at >= cte_score_guarantee.won_at)
+    LEFT JOIN orbit_production.session_allotments sa
+        ON (sessions.id = sa.session_id
+        AND sa.subject_id IN (43,356,342,316,315))
+    LEFT JOIN orbit_production.employees e2
+        ON e2.id = sessions.supervisor_id
+    LEFT JOIN orbit_production.users tutor_users
+        ON e2.user_id = tutor_users.id
+WHERE sa.minutes > 0
+GROUP BY cte_score_guarantee.student_id, cte_score_guarantee.course_id,
+         sessions.id, sessions.starts_at, sessions.attendances_attended_count, tutor
+ORDER BY cte_score_guarantee.student_id, sessions.starts_at
+"""
+
+EXAMS_QUERY = """
+WITH cte_score_guarantee AS (
+    SELECT
+        tp.student_id,
+        courses.id AS course_id,
+        DATE(tp.won_at) AS won_at,
+        MIN(sessions.starts_at) AS first_test_prep_session
+    FROM orbit_production.tutor_packages tp
+        JOIN orbit_production.students ON tp.student_id = students.id
+        JOIN orbit_production.enrollments e ON e.enrollee_id = students.id
+        JOIN orbit_production.courses ON e.course_id = courses.id
+        LEFT JOIN orbit_production.sessions
+            ON (sessions.course_id = courses.id AND sessions.starts_at >= tp.won_at)
+        LEFT JOIN orbit_production.session_allotments sa
+            ON (sessions.id = sa.session_id AND sa.subject_id IN (43,356,342,316,315))
+    WHERE tp.name LIKE '%%Score Guarantee%%'
+        AND tp.status = 'won'
+        AND courses.brand_id = 2
+    GROUP BY tp.student_id, courses.id, tp.won_at
+),
+rp_exams AS (
+    SELECT DISTINCT
+        cte_score_guarantee.student_id,
+        cte_score_guarantee.course_id,
+        cte_score_guarantee.first_test_prep_session,
+        exams_production.transcripts.id AS exam_id,
+        exams_production.transcripts.created_at AS exam_date,
+        exams_production.exams.exam_type,
+        exams_production.exams.form_code AS exam_code,
+        exams_production.transcripts.score,
+        exams_production.subjects.name AS section,
+        CASE WHEN exams_production.transcript_subjects.scaled_score_range IS NULL
+            THEN exams_production.transcript_subjects.scaled_score
+            ELSE CEILING((LEFT(exams_production.transcript_subjects.scaled_score_range,3)+ RIGHT(exams_production.transcript_subjects.scaled_score_range,3))/20)*10
+        END AS section_score
+    FROM cte_score_guarantee
+        LEFT JOIN orbit_production.students ON cte_score_guarantee.student_id = orbit_production.students.id
+        LEFT JOIN orbit_production.users ON orbit_production.users.id = orbit_production.students.user_id
+        LEFT JOIN exams_production.users ON orbit_production.users.id = exams_production.users.handle
+        LEFT JOIN exams_production.transcripts
+            ON (exams_production.transcripts.user_id = exams_production.users.id
+            AND exams_production.transcripts.attempt = 1
+            AND exams_production.transcripts.complete = 1
+            AND exams_production.transcripts.all_sections_scored = 1)
+        LEFT JOIN exams_production.exams ON exams_production.transcripts.exam_id = exams_production.exams.id
+        LEFT JOIN exams_production.transcript_subjects ON exams_production.transcript_subjects.transcript_id = exams_production.transcripts.id
+        LEFT JOIN exams_production.exam_subjects ON exams_production.exam_subjects.id = exams_production.transcript_subjects.exam_subject_id
+        LEFT JOIN exams_production.subjects ON exams_production.subjects.id = exams_production.exam_subjects.subject_id
+),
+cte_rp_scores AS (
+    SELECT
+        rp_exams.student_id,
+        rp_exams.course_id,
+        rp_exams.first_test_prep_session,
+        rp_exams.exam_id,
+        rp_exams.exam_date,
+        rp_exams.exam_type,
+        rp_exams.exam_code,
+        CASE WHEN rp_exams.exam_type = 'SAT' THEN SUM(rp_exams.section_score)
+             WHEN rp_exams.exam_type LIKE '%%ACT' THEN rp_exams.score
+        END AS score,
+        CASE WHEN rp_exams.exam_date <= rp_exams.first_test_prep_session
+                  OR rp_exams.first_test_prep_session IS NULL THEN 'before'
+             ELSE 'after'
+        END AS before_or_after_tutoring,
+        'transcript' AS source
+    FROM rp_exams
+    WHERE rp_exams.exam_type IN ('SAT', 'ACT', 'Digital ACT')
+    GROUP BY rp_exams.student_id, rp_exams.exam_id
+),
+cte_self_reported AS (
+    SELECT
+        cte_score_guarantee.student_id,
+        cte_score_guarantee.course_id,
+        cte_score_guarantee.first_test_prep_session,
+        orbit_production.study_area_snapshots.id AS exam_id,
+        orbit_production.study_area_snapshots.date AS exam_date,
+        orbit_production.subject_translations.name AS exam_type,
+        CASE WHEN orbit_production.subject_translations.name = 'ACT'
+             THEN 'Official Exam'
+             ELSE orbit_production.study_area_snapshots.kind
+        END AS exam_code,
+        CAST(orbit_production.study_area_snapshots.score AS DECIMAL) AS score,
+        CASE WHEN DATE(orbit_production.study_area_snapshots.date) < DATE(cte_score_guarantee.first_test_prep_session)
+                  OR cte_score_guarantee.first_test_prep_session IS NULL THEN 'before'
+             ELSE 'after'
+        END AS before_or_after_tutoring,
+        'self_reported' AS source
+    FROM cte_score_guarantee
+        LEFT JOIN orbit_production.students ON cte_score_guarantee.student_id = orbit_production.students.id
+        LEFT JOIN orbit_production.study_areas ON orbit_production.study_areas.student_id = orbit_production.students.id
+        LEFT JOIN orbit_production.study_area_snapshots
+            ON (orbit_production.study_areas.id = orbit_production.study_area_snapshots.study_area_id
+            AND orbit_production.study_area_snapshots.date IS NOT NULL)
+        LEFT JOIN orbit_production.subjects ON orbit_production.subjects.id = orbit_production.study_areas.subject_id
+        LEFT JOIN orbit_production.subject_translations
+            ON (orbit_production.subject_translations.subject_id = orbit_production.subjects.id
+            AND orbit_production.subject_translations.locale = 'en')
+    WHERE orbit_production.subject_translations.name IN ('ACT', 'SAT', 'Digital SAT', 'Digital ACT', 'PSAT', 'PSAT/NMSQT')
+)
+SELECT * FROM cte_rp_scores
+UNION ALL
+SELECT * FROM cte_self_reported
+ORDER BY student_id, exam_date
+"""
+
+GITHUB_SESSIONS_PATH = "data/score_guarantee_sessions.csv"
+GITHUB_EXAMS_PATH = "data/score_guarantee_exams.csv"
+
+
+def fetch_detail_data(query, label):
+    print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] Fetching {label}...")
+    conn = mysql.connector.connect(
+        host=RP_HOST, port=RP_PORT, user=RP_USER, password=RP_PASSWORD,
+        connection_timeout=30, charset="utf8mb4", auth_plugin="mysql_native_password",
+    )
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SET SESSION MAX_EXECUTION_TIME=300000")
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        cursor.close()
+    finally:
+        conn.close()
+    df = pd.DataFrame(rows)
+    print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] Fetched {len(df):,} {label} rows.")
+    return df
+
+
+def push_csv_to_github(df, path, label):
+    from github import Github
+    print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] Pushing {label} to GitHub ({GITHUB_REPO}/{path})...")
+    df["fetched_at"] = datetime.now().strftime("%B %d, %Y at %I:%M %p")
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
+    g = Github(GITHUB_TOKEN)
+    repo = g.get_repo(GITHUB_REPO)
+    commit_msg = f"Auto-update {label} — {datetime.now():%Y-%m-%d %H:%M}"
+    try:
+        existing = repo.get_contents(path)
+        repo.update_file(path, commit_msg, csv_bytes, existing.sha)
+        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] Updated {label}.")
+    except Exception:
+        repo.create_file(path, commit_msg, csv_bytes)
+        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] Created {label}.")
+
+
 if __name__ == "__main__":
     def _run():
         df = fetch_score_guarantee()
         push_to_github(df)
-        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] ✅ Done.")
+        df_sessions = fetch_detail_data(SESSIONS_QUERY, "sessions")
+        push_csv_to_github(df_sessions, GITHUB_SESSIONS_PATH, "sessions")
+        df_exams = fetch_detail_data(EXAMS_QUERY, "exams")
+        push_csv_to_github(df_exams, GITHUB_EXAMS_PATH, "exams")
+        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] ✅ Done — all 3 datasets synced.")
     run_with_retry(_run)

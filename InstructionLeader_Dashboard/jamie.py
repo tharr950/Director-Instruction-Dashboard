@@ -297,6 +297,38 @@ def render_app(config):
         df = pd.read_csv(io.StringIO(decoded))
         return df
 
+    @st.cache_data(ttl=3600)
+    def load_sg_sessions():
+        token = st.secrets.get("github", {}).get("token", "")
+        repo = st.secrets.get("github", {}).get("repo", "")
+        path = "data/score_guarantee_sessions.csv"
+        if not token or not repo:
+            return pd.DataFrame()
+        url = f"https://api.github.com/repos/{repo}/contents/{path}"
+        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code != 200:
+            return pd.DataFrame()
+        import io
+        decoded = base64.b64decode(r.json()["content"]).decode("utf-8")
+        return pd.read_csv(io.StringIO(decoded))
+
+    @st.cache_data(ttl=3600)
+    def load_sg_exams():
+        token = st.secrets.get("github", {}).get("token", "")
+        repo = st.secrets.get("github", {}).get("repo", "")
+        path = "data/score_guarantee_exams.csv"
+        if not token or not repo:
+            return pd.DataFrame()
+        url = f"https://api.github.com/repos/{repo}/contents/{path}"
+        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code != 200:
+            return pd.DataFrame()
+        import io
+        decoded = base64.b64decode(r.json()["content"]).decode("utf-8")
+        return pd.read_csv(io.StringIO(decoded))
+
 
 
     # ── Load data ─────────────────────────────────────────────────────────────
@@ -306,6 +338,8 @@ def render_app(config):
         df_restricted = load_restricted_data()
         df_kpi = load_dashboard_metrics()
         df_sg = load_score_guarantee()
+        df_sg_sessions = load_sg_sessions()
+        df_sg_exams = load_sg_exams()
     except Exception as e:
         st.error(f"Could not connect to Redshift: {e}")
         st.stop()
@@ -1018,54 +1052,209 @@ def render_app(config):
             st.warning("Score guarantee data not available. Check GitHub secrets.")
         else:
             sg = df_sg.copy()
-
-            # Parse dates
             for col in ["won_at", "first_test_prep_session", "starting_test_taken", "last_test_taken"]:
                 if col in sg.columns:
                     sg[col] = pd.to_datetime(sg[col], errors="coerce")
-
-            # Numeric conversions
             for col in ["package_hours", "completed_test_prep_hours", "starting_score", "latest_test_score"]:
                 if col in sg.columns:
                     sg[col] = pd.to_numeric(sg[col], errors="coerce")
-
-            # Score improvement
             sg["score_change"] = sg["latest_test_score"] - sg["starting_score"]
 
-            # Metrics
-            sg1, sg2, sg3, sg4 = st.columns(4)
-            sg1.metric("Total Packages", len(sg))
-            has_scores = sg.dropna(subset=["starting_score", "latest_test_score"])
-            sg2.metric("With Before & After Scores", len(has_scores))
-            if len(has_scores) > 0:
-                sg3.metric("Avg Score Change", f"{has_scores['score_change'].mean():+.0f}")
-                sg4.metric("Avg Hours Completed", f"{sg['completed_test_prep_hours'].mean():.1f}")
-            else:
-                sg3.metric("Avg Score Change", "—")
-                sg4.metric("Avg Hours Completed", f"{sg['completed_test_prep_hours'].mean():.1f}" if sg["completed_test_prep_hours"].notna().any() else "—")
+            # ── Build compliance checklist per student ─────────────────────────
+            compliance_rows = []
+            for _, row in sg.iterrows():
+                sid = row["student_id"]
+                checks = {}
+
+                # 1. Package 20+ hours
+                checks["1_pkg_20hrs"] = row["package_hours"] >= 20 if pd.notna(row["package_hours"]) else False
+
+                # 2. Used full hours
+                checks["2_hours_used"] = (
+                    row["completed_test_prep_hours"] >= row["package_hours"]
+                    if pd.notna(row["completed_test_prep_hours"]) and pd.notna(row["package_hours"])
+                    else False
+                )
+
+                # 3. Pace 1-2 hrs/week — need session detail
+                if not df_sg_sessions.empty and sid in df_sg_sessions["student_id"].values:
+                    stu_sess = df_sg_sessions[df_sg_sessions["student_id"] == sid].copy()
+                    stu_sess["starts_at"] = pd.to_datetime(stu_sess["starts_at"], errors="coerce")
+                    stu_sess = stu_sess.dropna(subset=["starts_at"]).sort_values("starts_at")
+                    if len(stu_sess) >= 2:
+                        first_s = stu_sess["starts_at"].min()
+                        last_s = stu_sess["starts_at"].max()
+                        weeks = max((last_s - first_s).days / 7.0, 1)
+                        total_hrs = stu_sess["session_hours"].sum()
+                        hrs_per_week = total_hrs / weeks
+                        checks["3_pace_ok"] = 0.5 <= hrs_per_week <= 3.0
+                        checks["3_pace_val"] = round(hrs_per_week, 2)
+                    else:
+                        checks["3_pace_ok"] = None
+                        checks["3_pace_val"] = None
+                else:
+                    checks["3_pace_ok"] = None
+                    checks["3_pace_val"] = None
+
+                # 4. Baseline score before first session
+                checks["4_baseline"] = (
+                    pd.notna(row["starting_test_taken"]) and pd.notna(row["first_test_prep_session"])
+                    and row["starting_test_taken"] <= row["first_test_prep_session"]
+                )
+
+                # 5. No missed sessions
+                if not df_sg_sessions.empty and sid in df_sg_sessions["student_id"].values:
+                    stu_sess = df_sg_sessions[df_sg_sessions["student_id"] == sid]
+                    total_sessions = len(stu_sess)
+                    attended_sessions = int(stu_sess["attended"].sum())
+                    checks["5_attendance"] = attended_sessions == total_sessions
+                    checks["5_attended"] = attended_sessions
+                    checks["5_total"] = total_sessions
+                else:
+                    checks["5_attendance"] = None
+                    checks["5_attended"] = None
+                    checks["5_total"] = None
+
+                # 7. Minimum practice tests (excluding baseline)
+                pkg_hrs = row["package_hours"] if pd.notna(row["package_hours"]) else 0
+                if pkg_hrs <= 24:
+                    required_tests = 4
+                else:
+                    required_tests = 4 + int((pkg_hrs - 24) / 6)
+
+                if not df_sg_exams.empty and sid in df_sg_exams["student_id"].values:
+                    stu_exams = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
+                    stu_exams["exam_date"] = pd.to_datetime(stu_exams["exam_date"], errors="coerce")
+                    after_exams = stu_exams[stu_exams["before_or_after_tutoring"] == "after"]
+                    checks["7_practice_tests"] = len(after_exams) >= required_tests
+                    checks["7_taken"] = len(after_exams)
+                    checks["7_required"] = required_tests
+
+                    # 8. At least 1 week gap between practice tests
+                    if len(after_exams) >= 2:
+                        exam_dates = after_exams["exam_date"].dropna().sort_values().reset_index(drop=True)
+                        gaps = exam_dates.diff().dt.days.dropna()
+                        checks["8_week_gaps"] = bool((gaps >= 7).all()) if len(gaps) > 0 else True
+                        checks["8_min_gap"] = int(gaps.min()) if len(gaps) > 0 else None
+                    else:
+                        checks["8_week_gaps"] = True if len(after_exams) <= 1 else None
+                        checks["8_min_gap"] = None
+                else:
+                    checks["7_practice_tests"] = None
+                    checks["7_taken"] = 0
+                    checks["7_required"] = required_tests
+                    checks["8_week_gaps"] = None
+                    checks["8_min_gap"] = None
+
+                # 9. Official exam within 14 days of last session
+                if not df_sg_sessions.empty and sid in df_sg_sessions["student_id"].values:
+                    stu_sess = df_sg_sessions[df_sg_sessions["student_id"] == sid].copy()
+                    stu_sess["starts_at"] = pd.to_datetime(stu_sess["starts_at"], errors="coerce")
+                    last_session = stu_sess["starts_at"].max()
+                    if pd.notna(row["last_test_taken"]) and pd.notna(last_session):
+                        days_after = (row["last_test_taken"] - last_session).days
+                        checks["9_final_14days"] = 0 <= days_after <= 14
+                        checks["9_days_after"] = int(days_after)
+                    else:
+                        checks["9_final_14days"] = None
+                        checks["9_days_after"] = None
+                else:
+                    checks["9_final_14days"] = None
+                    checks["9_days_after"] = None
+
+                checks["student_id"] = sid
+                checks["student"] = row.get("student", "")
+                checks["tutor"] = row.get("tutor", "")
+                checks["advisor"] = row.get("advisor", "")
+                checks["package_hours"] = row.get("package_hours")
+                checks["completed_hours"] = row.get("completed_test_prep_hours")
+                checks["starting_score"] = row.get("starting_score")
+                checks["latest_score"] = row.get("latest_test_score")
+                checks["score_change"] = row.get("score_change")
+                compliance_rows.append(checks)
+
+            comp_df = pd.DataFrame(compliance_rows)
+
+            # ── Compliance summary metrics ────────────────────────────────────
+            def pct_pass(col):
+                valid = comp_df[col].dropna()
+                if len(valid) == 0:
+                    return "—"
+                return f"{(valid.sum() / len(valid) * 100):.0f}%"
+
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Total Packages", len(comp_df))
+            c2.metric("Pkg ≥ 20hrs", pct_pass("1_pkg_20hrs"))
+            c3.metric("Hours Completed", pct_pass("2_hours_used"))
+            c4.metric("Baseline Before Start", pct_pass("4_baseline"))
+
+            c5, c6, c7, c8 = st.columns(4)
+            c5.metric("Pace 1-2 hrs/wk", pct_pass("3_pace_ok"))
+            c6.metric("100% Attendance", pct_pass("5_attendance"))
+            c7.metric("Enough Practice Tests", pct_pass("7_practice_tests"))
+            c8.metric("1-Week Test Gaps", pct_pass("8_week_gaps"))
 
             st.markdown("")
 
-            # Score improvement chart
+            # ── Compliance matrix ─────────────────────────────────────────────
+            st.markdown(
+                "<p class='section-label'>Compliance</p>"
+                "<p class='section-title'>Score Guarantee Requirements Checklist</p>",
+                unsafe_allow_html=True,
+            )
+
+            def status_icon(val):
+                if val is True:
+                    return "✅"
+                elif val is False:
+                    return "❌"
+                return "—"
+
+            matrix = comp_df[["student", "tutor", "advisor"]].copy()
+            matrix["Pkg ≥20hr"] = comp_df["1_pkg_20hrs"].apply(status_icon)
+            matrix["Hrs Used"] = comp_df["2_hours_used"].apply(status_icon)
+            matrix["Pace"] = comp_df.apply(
+                lambda r: f"{status_icon(r['3_pace_ok'])} ({r['3_pace_val']:.1f}/wk)" if pd.notna(r.get("3_pace_val")) else status_icon(r["3_pace_ok"]), axis=1
+            )
+            matrix["Baseline"] = comp_df["4_baseline"].apply(status_icon)
+            matrix["Attend"] = comp_df.apply(
+                lambda r: f"{status_icon(r['5_attendance'])} ({int(r['5_attended'])}/{int(r['5_total'])})" if pd.notna(r.get("5_attended")) else "—", axis=1
+            )
+            matrix["Tests"] = comp_df.apply(
+                lambda r: f"{status_icon(r['7_practice_tests'])} ({int(r['7_taken'])}/{int(r['7_required'])})" if pd.notna(r.get("7_taken")) else "—", axis=1
+            )
+            matrix["Gaps ≥7d"] = comp_df.apply(
+                lambda r: f"{status_icon(r['8_week_gaps'])} (min {int(r['8_min_gap'])}d)" if pd.notna(r.get("8_min_gap")) else status_icon(r["8_week_gaps"]), axis=1
+            )
+            matrix["Final ≤14d"] = comp_df.apply(
+                lambda r: f"{status_icon(r['9_final_14days'])} ({int(r['9_days_after'])}d)" if pd.notna(r.get("9_days_after")) else status_icon(r["9_final_14days"]), axis=1
+            )
+            matrix["Score"] = comp_df.apply(
+                lambda r: f"{r['starting_score']:.0f}→{r['latest_score']:.0f} ({r['score_change']:+.0f})"
+                if pd.notna(r.get("starting_score")) and pd.notna(r.get("latest_score")) else "—", axis=1
+            )
+            matrix = matrix.rename(columns={"student": "Student", "tutor": "Tutor", "advisor": "Advisor"})
+
+            st.dataframe(matrix, hide_index=True, use_container_width=True,
+                         height=min(700, len(matrix) * 35 + 60))
+
+            # ── Score improvement chart ───────────────────────────────────────
+            has_scores = comp_df.dropna(subset=["starting_score", "latest_score"])
             if len(has_scores) > 0:
+                st.markdown("")
                 st.markdown(
                     "<p class='section-label'>Results</p>"
                     "<p class='section-title'>Score Changes by Student</p>",
                     unsafe_allow_html=True,
                 )
-
                 plot_sg = has_scores[["student", "score_change"]].sort_values("score_change", ascending=True)
                 colors = ["#10b981" if x >= 0 else "#ef4444" for x in plot_sg["score_change"]]
-
                 fig_sg = go.Figure()
                 fig_sg.add_trace(go.Bar(
-                    y=plot_sg["student"],
-                    x=plot_sg["score_change"],
-                    orientation="h",
+                    y=plot_sg["student"], x=plot_sg["score_change"], orientation="h",
                     marker_color=colors,
                     text=plot_sg["score_change"].apply(lambda x: f"{x:+.0f}"),
-                    textposition="outside",
-                    textfont=dict(size=11),
+                    textposition="outside", textfont=dict(size=11),
                 ))
                 fig_sg.update_layout(
                     plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
@@ -1078,75 +1267,6 @@ def render_app(config):
                 )
                 st.plotly_chart(fig_sg, use_container_width=True)
 
-            # Hours utilization
-            st.markdown("")
-            st.markdown(
-                "<p class='section-label'>Utilization</p>"
-                "<p class='section-title'>Package Hours vs Completed Hours</p>",
-                unsafe_allow_html=True,
-            )
-
-            hours_df = sg.dropna(subset=["package_hours", "completed_test_prep_hours"])
-            if len(hours_df) > 0:
-                hours_df["pct_used"] = (hours_df["completed_test_prep_hours"] / hours_df["package_hours"] * 100).round(1)
-                hours_df = hours_df.sort_values("pct_used", ascending=True)
-
-                fig_hrs = go.Figure()
-                fig_hrs.add_trace(go.Bar(
-                    y=hours_df["student"], x=hours_df["package_hours"],
-                    name="Package Hours", marker_color="rgba(59,130,246,0.3)",
-                    orientation="h",
-                ))
-                fig_hrs.add_trace(go.Bar(
-                    y=hours_df["student"], x=hours_df["completed_test_prep_hours"],
-                    name="Completed Hours", marker_color="#3b82f6",
-                    orientation="h",
-                    text=hours_df["pct_used"].apply(lambda x: f"{x:.0f}%"),
-                    textposition="outside", textfont=dict(size=10),
-                ))
-                fig_hrs.update_layout(
-                    barmode="overlay",
-                    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(family="DM Sans", color="#475569"),
-                    legend=dict(orientation="h", y=1.05, x=0.5, xanchor="center", font=dict(size=11)),
-                    margin=dict(l=10, r=40, t=30, b=40),
-                    xaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Hours"),
-                    yaxis=dict(automargin=True),
-                    height=max(400, len(hours_df) * 30 + 80),
-                )
-                st.plotly_chart(fig_hrs, use_container_width=True)
-
-            # Detail table
-            st.markdown("")
-            st.markdown(
-                "<p class='section-label'>Detail</p>"
-                "<p class='section-title'>All Score Guarantee Packages</p>",
-                unsafe_allow_html=True,
-            )
-
-            display_cols = ["student", "tutor", "advisor", "won_at", "package_hours",
-                            "completed_test_prep_hours", "subjects_covered",
-                            "starting_score", "latest_test_score", "score_change",
-                            "exams_since_tutoring"]
-            display_cols = [c for c in display_cols if c in sg.columns]
-            sg_display = sg[display_cols].copy()
-
-            rename_map = {
-                "student": "Student", "tutor": "Tutor", "advisor": "Advisor",
-                "won_at": "Won Date", "package_hours": "Pkg Hours",
-                "completed_test_prep_hours": "Completed Hrs", "subjects_covered": "Subjects",
-                "starting_score": "Start Score", "latest_test_score": "Latest Score",
-                "score_change": "Change", "exams_since_tutoring": "Exams After",
-            }
-            sg_display = sg_display.rename(columns=rename_map)
-            if "Won Date" in sg_display.columns:
-                sg_display["Won Date"] = sg_display["Won Date"].dt.strftime("%Y-%m-%d")
-
-            sg_display = sg_display.sort_values("Won Date", ascending=False) if "Won Date" in sg_display.columns else sg_display
-
-            st.dataframe(sg_display, hide_index=True, use_container_width=True,
-                         height=min(600, len(sg_display) * 35 + 60))
-
             # Fetched at
             if "fetched_at" in df_sg.columns:
                 st.markdown(
@@ -1155,7 +1275,8 @@ def render_app(config):
                     unsafe_allow_html=True,
                 )
 
-    # ══════════════════════════════════════════════════════════════════════════
+
+        # ══════════════════════════════════════════════════════════════════════════
     # PAGE — FULL ROSTER
     # ══════════════════════════════════════════════════════════════════════════
     elif page == "📋 Full Roster":
