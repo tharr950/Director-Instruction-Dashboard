@@ -546,41 +546,6 @@ def render_app(config):
             st.markdown("")
 
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # PAGE — TEAM COUNTS
-    # ══════════════════════════════════════════════════════════════════════════
-    if page == "👥 Team Counts":
-        st.markdown(
-            "<p class='section-label'>Team Size</p>"
-            "<p class='section-title'>Headcount by Faculty Leader</p>",
-            unsafe_allow_html=True,
-        )
-
-        team_summary = (
-            filt.groupby("manager")
-            .agg(
-                total_tutors=("tutor_id", "count"),
-                professional=("tutor_type", lambda x: (x == "Professional").sum()),
-                adjunct=("tutor_type", lambda x: (x == "Adjunct").sum()),
-                avg_delivery_target=("delivery_target", "mean"),
-            )
-            .reset_index()
-            .rename(columns={"manager": "Faculty Leader"})
-            .sort_values("total_tutors", ascending=False)
-        )
-        team_summary["avg_delivery_target"] = team_summary["avg_delivery_target"].round(1)
-
-        col_chart, col_table = st.columns([1.3, 1])
-
-        with col_chart:
-            fig = go.Figure()
-            fig.add_trace(go.Bar(
-                x=team_summary["Faculty Leader"], y=team_summary["professional"],
-                name="Professional", marker_color="#3b82f6",
-                text=team_summary["professional"], textposition="inside",
-                textfont=dict(size=13, color="white"),
-            ))
-            fig.add_trace(go.Bar(
                 x=team_summary["Faculty Leader"], y=team_summary["adjunct"],
                 name="Adjunct", marker_color="#94a3b8",
                 text=team_summary["adjunct"], textposition="inside",
