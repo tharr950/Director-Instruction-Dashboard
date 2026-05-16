@@ -391,162 +391,7 @@ def render_app(config):
     filt = df[df["manager"].isin(selected_managers)].copy()
     df_restricted = df_restricted[~df_restricted["team"].isin(excluded_teams)]
 
-    # ── Score Guarantee Alerts ─────────────────────────────────────────────────
-    if not df_sg.empty:
-        sg_alert = df_sg.copy()
-        for col in ["first_test_prep_session", "starting_test_taken", "won_at"]:
-            if col in sg_alert.columns:
-                sg_alert[col] = pd.to_datetime(sg_alert[col], errors="coerce")
-        for col in ["package_hours", "completed_test_prep_hours", "starting_score"]:
-            if col in sg_alert.columns:
-                sg_alert[col] = pd.to_numeric(sg_alert[col], errors="coerce")
-
-        # ── Alert 1: No baseline score ────────────────────────────────────────
-        no_baseline = sg_alert[
-            sg_alert["first_test_prep_session"].notna()
-            & (sg_alert["starting_score"].isna()
-               | sg_alert["starting_test_taken"].isna()
-               | (sg_alert["starting_test_taken"] > sg_alert["first_test_prep_session"]))
-        ].sort_values("student")
-
-        no_baseline_html = ""
-        if len(no_baseline) > 0:
-            items = ""
-            for _, row in no_baseline.iterrows():
-                student = row.get("student", "Unknown")
-                advisor = row.get("advisor", "Unknown")
-                first_sess = row["first_test_prep_session"].strftime("%Y-%m-%d") if pd.notna(row.get("first_test_prep_session")) else "—"
-                items += (
-                    f"<p style='color:#991b1b; margin:2px 0; font-size:0.82rem;'>"
-                    f"• <b>{student}</b><br>"
-                    f"&nbsp;&nbsp;Advisor: {advisor}<br>"
-                    f"&nbsp;&nbsp;Tutoring since: {first_sess}</p>"
-                )
-            no_baseline_html = (
-                "<div style='background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px 16px; height:100%;'>"
-                "<p style='color:#991b1b; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
-                "⚠️ NO BASELINE SCORE</p>"
-                f"{items}</div>"
-            )
-
-        # ── Alert 2: Behind on exams ──────────────────────────────────────────
-        behind_on_exams = []
-        if not df_sg_sessions.empty and not df_sg_exams.empty:
-            for _, row in sg_alert.iterrows():
-                sid = row["student_id"]
-                pkg_hrs = row["package_hours"]
-                if pd.isna(pkg_hrs) or pd.isna(row.get("first_test_prep_session")):
-                    continue
-                if pkg_hrs <= 24:
-                    required_total = 4
-                    num_milestones = 4
-                else:
-                    required_total = 4 + int((pkg_hrs - 24) / 6)
-                    num_milestones = required_total
-                milestone_hours = [(pkg_hrs / num_milestones) * (i + 1) for i in range(num_milestones)]
-                completed = row["completed_test_prep_hours"] if pd.notna(row.get("completed_test_prep_hours")) else 0
-                exams_expected = sum(1 for mh in milestone_hours if completed >= mh)
-                exams_taken = 0
-                if sid in df_sg_exams["student_id"].values:
-                    exams_taken = len(df_sg_exams[(df_sg_exams["student_id"] == sid) & (df_sg_exams["before_or_after_tutoring"] == "after")])
-                if exams_expected > 0 and exams_taken < exams_expected:
-                    behind_on_exams.append({
-                        "student": row.get("student", "Unknown"),
-                        "advisor": row.get("advisor", "Unknown"),
-                        "tutor": row.get("tutor", "Unknown"),
-                        "exams_taken": exams_taken,
-                        "exams_expected": exams_expected,
-                        "completed": completed,
-                        "pkg_hrs": pkg_hrs,
-                        "required_total": required_total,
-                    })
-            behind_on_exams.sort(key=lambda x: x["student"])
-
-        behind_html = ""
-        if len(behind_on_exams) > 0:
-            items = ""
-            for b in behind_on_exams:
-                items += (
-                    f"<p style='color:#92400e; margin:2px 0; font-size:0.82rem;'>"
-                    f"• <b>{b['student']}</b><br>"
-                    f"&nbsp;&nbsp;Advisor: {b['advisor']} | Tutor: {b['tutor']}<br>"
-                    f"&nbsp;&nbsp;{b['exams_taken']}/{b['exams_expected']} exams "
-                    f"({b['completed']:.0f}/{b['pkg_hrs']:.0f} hrs)</p>"
-                )
-            behind_html = (
-                "<div style='background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:14px 16px; height:100%;'>"
-                "<p style='color:#92400e; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
-                "⚠️ BEHIND ON PRACTICE TESTS</p>"
-                f"{items}</div>"
-            )
-
-        # ── Alert 3: No score improvement ─────────────────────────────────────
-        score_concerns = []
-        if not df_sg_exams.empty:
-            for _, row in sg_alert.iterrows():
-                sid = row["student_id"]
-                baseline = row["starting_score"]
-                if pd.isna(baseline) or sid not in df_sg_exams["student_id"].values:
-                    continue
-                stu_exams = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
-                stu_exams["exam_date"] = pd.to_datetime(stu_exams["exam_date"], errors="coerce")
-                stu_exams["score"] = pd.to_numeric(stu_exams["score"], errors="coerce")
-                after_exams = stu_exams[
-                    (stu_exams["before_or_after_tutoring"] == "after") & stu_exams["score"].notna()
-                ].sort_values("exam_date")
-                if len(after_exams) == 0:
-                    continue
-                most_recent = after_exams.iloc[-1]["score"]
-                avg_score = after_exams["score"].mean()
-                recent_vs_baseline = most_recent - baseline
-                if recent_vs_baseline <= 0:
-                    if len(after_exams) >= 2:
-                        first_after = after_exams.iloc[0]["score"]
-                        trend = "📈 up" if most_recent > first_after else ("📉 down" if most_recent < first_after else "➡️ flat")
-                    else:
-                        trend = "—"
-                    score_concerns.append({
-                        "student": row.get("student", "Unknown"),
-                        "advisor": row.get("advisor", "Unknown"),
-                        "tutor": row.get("tutor", "Unknown"),
-                        "baseline": baseline,
-                        "most_recent": most_recent,
-                        "recent_change": recent_vs_baseline,
-                        "avg_score": avg_score,
-                        "num_exams": len(after_exams),
-                        "trend": trend,
-                    })
-            score_concerns.sort(key=lambda x: x["student"])
-
-        score_html = ""
-        if len(score_concerns) > 0:
-            items = ""
-            for sc in score_concerns:
-                items += (
-                    f"<p style='color:#991b1b; margin:2px 0; font-size:0.82rem;'>"
-                    f"• <b>{sc['student']}</b><br>"
-                    f"&nbsp;&nbsp;Advisor: {sc['advisor']} | Tutor: {sc['tutor']}<br>"
-                    f"&nbsp;&nbsp;Baseline: {sc['baseline']:.0f} → Latest: {sc['most_recent']:.0f} "
-                    f"({sc['recent_change']:+.0f}) | {sc['num_exams']} exams {sc['trend']}</p>"
-                )
-            score_html = (
-                "<div style='background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px 16px; height:100%;'>"
-                "<p style='color:#991b1b; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
-                "⚠️ NO SCORE IMPROVEMENT</p>"
-                f"{items}</div>"
-            )
-
-        # ── Render alerts horizontally ────────────────────────────────────────
-        active_alerts = [h for h in [no_baseline_html, behind_html, score_html] if h]
-        if active_alerts:
-            cols = st.columns(len(active_alerts))
-            for i, html in enumerate(active_alerts):
-                with cols[i]:
-                    st.markdown(html, unsafe_allow_html=True)
-            st.markdown("")
-
-
-    # ══════════════════════════════════════════════════════════════════════════
+        # ══════════════════════════════════════════════════════════════════════════
     # PAGE — TEAM COUNTS
     # ══════════════════════════════════════════════════════════════════════════
     if page == "👥 Team Counts":
@@ -1190,6 +1035,158 @@ def render_app(config):
         if df_sg.empty:
             st.warning("Score guarantee data not available. Check GitHub secrets.")
         else:
+            # ── Score Guarantee Alerts ────────────────────────────────────────
+            sg_alert_data = df_sg.copy()
+            for col in ["first_test_prep_session", "starting_test_taken", "won_at"]:
+                if col in sg_alert_data.columns:
+                    sg_alert_data[col] = pd.to_datetime(sg_alert_data[col], errors="coerce")
+            for col in ["package_hours", "completed_test_prep_hours", "starting_score"]:
+                if col in sg_alert_data.columns:
+                    sg_alert_data[col] = pd.to_numeric(sg_alert_data[col], errors="coerce")
+
+            # Alert 1: No baseline score
+            no_baseline = sg_alert_data[
+                sg_alert_data["first_test_prep_session"].notna()
+                & (sg_alert_data["starting_score"].isna()
+                   | sg_alert_data["starting_test_taken"].isna()
+                   | (sg_alert_data["starting_test_taken"] > sg_alert_data["first_test_prep_session"]))
+            ].sort_values("student")
+
+            no_baseline_html = ""
+            if len(no_baseline) > 0:
+                items = ""
+                for _, row in no_baseline.iterrows():
+                    student = row.get("student", "Unknown")
+                    advisor = row.get("advisor", "Unknown")
+                    first_sess = row["first_test_prep_session"].strftime("%Y-%m-%d") if pd.notna(row.get("first_test_prep_session")) else "—"
+                    items += (
+                        f"<p style='color:#991b1b; margin:2px 0; font-size:0.82rem;'>"
+                        f"• <b>{student}</b><br>"
+                        f"&nbsp;&nbsp;Advisor: {advisor}<br>"
+                        f"&nbsp;&nbsp;Tutoring since: {first_sess}</p>"
+                    )
+                no_baseline_html = (
+                    "<div style='background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px 16px; height:100%;'>"
+                    "<p style='color:#991b1b; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
+                    "⚠️ NO BASELINE SCORE</p>"
+                    f"{items}</div>"
+                )
+
+            # Alert 2: Behind on exams
+            behind_on_exams = []
+            if not df_sg_sessions.empty and not df_sg_exams.empty:
+                for _, row in sg_alert_data.iterrows():
+                    sid = row["student_id"]
+                    pkg_hrs = row["package_hours"]
+                    if pd.isna(pkg_hrs) or pd.isna(row.get("first_test_prep_session")):
+                        continue
+                    if pkg_hrs <= 24:
+                        required_total = 4
+                        num_milestones = 4
+                    else:
+                        required_total = 4 + int((pkg_hrs - 24) / 6)
+                        num_milestones = required_total
+                    milestone_hours = [(pkg_hrs / num_milestones) * (i + 1) for i in range(num_milestones)]
+                    completed = row["completed_test_prep_hours"] if pd.notna(row.get("completed_test_prep_hours")) else 0
+                    exams_expected = sum(1 for mh in milestone_hours if completed >= mh)
+                    exams_taken = 0
+                    if sid in df_sg_exams["student_id"].values:
+                        exams_taken = len(df_sg_exams[(df_sg_exams["student_id"] == sid) & (df_sg_exams["before_or_after_tutoring"] == "after")])
+                    if exams_expected > 0 and exams_taken < exams_expected:
+                        behind_on_exams.append({
+                            "student": row.get("student", "Unknown"),
+                            "advisor": row.get("advisor", "Unknown"),
+                            "tutor": row.get("tutor", "Unknown"),
+                            "exams_taken": exams_taken,
+                            "exams_expected": exams_expected,
+                            "completed": completed,
+                            "pkg_hrs": pkg_hrs,
+                            "required_total": required_total,
+                        })
+                behind_on_exams.sort(key=lambda x: x["student"])
+
+            behind_html = ""
+            if len(behind_on_exams) > 0:
+                items = ""
+                for b in behind_on_exams:
+                    items += (
+                        f"<p style='color:#92400e; margin:2px 0; font-size:0.82rem;'>"
+                        f"• <b>{b['student']}</b><br>"
+                        f"&nbsp;&nbsp;Advisor: {b['advisor']} | Tutor: {b['tutor']}<br>"
+                        f"&nbsp;&nbsp;{b['exams_taken']}/{b['exams_expected']} exams "
+                        f"({b['completed']:.0f}/{b['pkg_hrs']:.0f} hrs)</p>"
+                    )
+                behind_html = (
+                    "<div style='background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:14px 16px; height:100%;'>"
+                    "<p style='color:#92400e; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
+                    "⚠️ BEHIND ON PRACTICE TESTS</p>"
+                    f"{items}</div>"
+                )
+
+            # Alert 3: No score improvement
+            score_concerns = []
+            if not df_sg_exams.empty:
+                for _, row in sg_alert_data.iterrows():
+                    sid = row["student_id"]
+                    baseline = row["starting_score"]
+                    if pd.isna(baseline) or sid not in df_sg_exams["student_id"].values:
+                        continue
+                    stu_exams = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
+                    stu_exams["exam_date"] = pd.to_datetime(stu_exams["exam_date"], errors="coerce")
+                    stu_exams["score"] = pd.to_numeric(stu_exams["score"], errors="coerce")
+                    after_exams = stu_exams[
+                        (stu_exams["before_or_after_tutoring"] == "after") & stu_exams["score"].notna()
+                    ].sort_values("exam_date")
+                    if len(after_exams) == 0:
+                        continue
+                    most_recent = after_exams.iloc[-1]["score"]
+                    avg_score = after_exams["score"].mean()
+                    recent_vs_baseline = most_recent - baseline
+                    if recent_vs_baseline <= 0:
+                        if len(after_exams) >= 2:
+                            first_after = after_exams.iloc[0]["score"]
+                            trend = "📈 up" if most_recent > first_after else ("📉 down" if most_recent < first_after else "➡️ flat")
+                        else:
+                            trend = "—"
+                        score_concerns.append({
+                            "student": row.get("student", "Unknown"),
+                            "advisor": row.get("advisor", "Unknown"),
+                            "tutor": row.get("tutor", "Unknown"),
+                            "baseline": baseline,
+                            "most_recent": most_recent,
+                            "recent_change": recent_vs_baseline,
+                            "avg_score": avg_score,
+                            "num_exams": len(after_exams),
+                            "trend": trend,
+                        })
+                score_concerns.sort(key=lambda x: x["student"])
+
+            score_html = ""
+            if len(score_concerns) > 0:
+                items = ""
+                for sc in score_concerns:
+                    items += (
+                        f"<p style='color:#991b1b; margin:2px 0; font-size:0.82rem;'>"
+                        f"• <b>{sc['student']}</b><br>"
+                        f"&nbsp;&nbsp;Advisor: {sc['advisor']} | Tutor: {sc['tutor']}<br>"
+                        f"&nbsp;&nbsp;Baseline: {sc['baseline']:.0f} → Latest: {sc['most_recent']:.0f} "
+                        f"({sc['recent_change']:+.0f}) | {sc['num_exams']} exams {sc['trend']}</p>"
+                    )
+                score_html = (
+                    "<div style='background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px 16px; height:100%;'>"
+                    "<p style='color:#991b1b; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
+                    "⚠️ NO SCORE IMPROVEMENT</p>"
+                    f"{items}</div>"
+                )
+
+            # Render alerts horizontally
+            active_alerts = [h for h in [no_baseline_html, behind_html, score_html] if h]
+            if active_alerts:
+                cols = st.columns(len(active_alerts))
+                for i, html in enumerate(active_alerts):
+                    with cols[i]:
+                        st.markdown(html, unsafe_allow_html=True)
+                st.markdown("")
             sg = df_sg.copy()
             for col in ["won_at", "first_test_prep_session", "starting_test_taken", "last_test_taken"]:
                 if col in sg.columns:
