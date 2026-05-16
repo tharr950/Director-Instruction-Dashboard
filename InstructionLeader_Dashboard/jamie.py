@@ -391,20 +391,38 @@ def render_app(config):
     filt = df[df["manager"].isin(selected_managers)].copy()
     df_restricted = df_restricted[~df_restricted["team"].isin(excluded_teams)]
 
-    # ── Top-level metrics ─────────────────────────────────────────────────────
-    st.markdown(
-        "<p class='section-label'>Overview</p>"
-        "<p class='section-title'>Team Composition at a Glance</p>",
-        unsafe_allow_html=True,
-    )
+    # ── Score Guarantee Alerts ─────────────────────────────────────────────────
+    if not df_sg.empty and not df_sg_exams.empty:
+        sg_alert = df_sg.copy()
+        for col in ["first_test_prep_session", "starting_test_taken"]:
+            if col in sg_alert.columns:
+                sg_alert[col] = pd.to_datetime(sg_alert[col], errors="coerce")
 
-    m1, m2, m3, m4, m5, m6 = st.columns(6)
-    m1.metric("Total Tutors", len(filt))
-    m2.metric("Faculty Leaders", filt["manager"].nunique())
-    m3.metric("Avg Tenure (yr)", f"{filt['tenure_years'].mean():.1f}")
-    m4.metric("Professional", len(filt[filt["tutor_type"] == "Professional"]))
-    m5.metric("Adjunct", len(filt[filt["tutor_type"] == "Adjunct"]))
-    m6.metric("Avg Delivery Target", f"{filt['delivery_target'].mean():.0f}")
+        # Students who have started tutoring but have NO baseline score
+        no_baseline = sg_alert[
+            sg_alert["first_test_prep_session"].notna()
+            & (sg_alert["starting_score"].isna()
+               | sg_alert["starting_test_taken"].isna()
+               | (sg_alert["starting_test_taken"] > sg_alert["first_test_prep_session"]))
+        ]
+
+        if len(no_baseline) > 0:
+            st.markdown(
+                "<div style='background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:16px 20px; margin-bottom:16px;'>"
+                "<p style='color:#991b1b; font-weight:600; font-size:0.85rem; margin:0 0 8px 0;'>"
+                "⚠️ SCORE GUARANTEE ALERT — Students tutoring without a baseline score</p>",
+                unsafe_allow_html=True,
+            )
+            for _, row in no_baseline.iterrows():
+                student = row.get("student", "Unknown")
+                advisor = row.get("advisor", "Unknown")
+                first_sess = row["first_test_prep_session"].strftime("%Y-%m-%d") if pd.notna(row.get("first_test_prep_session")) else "—"
+                st.markdown(
+                    f"<p style='color:#991b1b; margin:2px 0; font-size:0.85rem;'>"
+                    f"&nbsp;&nbsp;&nbsp;&nbsp;• <b>{student}</b> — Advisor: {advisor} — Tutoring since: {first_sess}</p>",
+                    unsafe_allow_html=True,
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("")
 
