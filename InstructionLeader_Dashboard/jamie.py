@@ -1282,7 +1282,7 @@ def render_app(config):
                     st.markdown("**Compliance Status:**")
 
                     def check_line(label, passed, detail=""):
-                        icon = "✅" if passed is True else ("❌" if passed is False else "⚪")
+                        icon = "✅" if pd.notna(passed) and bool(passed) else ("❌" if pd.notna(passed) and not bool(passed) else "⚪")
                         return f"{icon} **{label}** {detail}"
 
                     lines = []
