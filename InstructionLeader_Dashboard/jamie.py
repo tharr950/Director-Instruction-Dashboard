@@ -11,6 +11,8 @@ import psycopg2
 import plotly.graph_objects as go
 from datetime import date
 import os
+import requests
+import base64
 
 
 def render_app(config):
@@ -278,6 +280,24 @@ def render_app(config):
             return pd.read_excel(file, sheet_name="MonthlyMetricFullData", header=3)
         return pd.DataFrame()
 
+    @st.cache_data(ttl=3600)
+    def load_score_guarantee():
+        token = st.secrets.get("github", {}).get("token", "")
+        repo = st.secrets.get("github", {}).get("repo", "")
+        path = "data/score_guarantee.csv"
+        if not token or not repo:
+            return pd.DataFrame()
+        url = f"https://api.github.com/repos/{repo}/contents/{path}"
+        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code != 200:
+            return pd.DataFrame()
+        import io
+        decoded = base64.b64decode(r.json()["content"]).decode("utf-8")
+        df = pd.read_csv(io.StringIO(decoded))
+        return df
+
+
 
     # ── Load data ─────────────────────────────────────────────────────────────
     try:
@@ -285,6 +305,7 @@ def render_app(config):
         df_meetings = load_meeting_data()
         df_restricted = load_restricted_data()
         df_kpi = load_dashboard_metrics()
+        df_sg = load_score_guarantee()
     except Exception as e:
         st.error(f"Could not connect to Redshift: {e}")
         st.stop()
@@ -315,6 +336,7 @@ def render_app(config):
             "🚫 Restricted Status",
             "📅 Meetings",
             "📈 KPI Comparison",
+            "🎯 Score Guarantee",
             "📋 Full Roster",
         ]
         page = st.radio("📂 Navigation", _page_options, index=0)
@@ -980,6 +1002,158 @@ def render_app(config):
             kpi_table = kpi_table.sort_values("Faculty Leader")
 
             st.dataframe(kpi_table, hide_index=True, use_container_width=True)
+
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAGE — SCORE GUARANTEE
+    # ══════════════════════════════════════════════════════════════════════════
+    elif page == "🎯 Score Guarantee":
+        st.markdown(
+            "<p class='section-label'>Test Prep</p>"
+            "<p class='section-title'>Score Guarantee Overview</p>",
+            unsafe_allow_html=True,
+        )
+
+        if df_sg.empty:
+            st.warning("Score guarantee data not available. Check GitHub secrets.")
+        else:
+            sg = df_sg.copy()
+
+            # Parse dates
+            for col in ["won_at", "first_test_prep_session", "starting_test_taken", "last_test_taken"]:
+                if col in sg.columns:
+                    sg[col] = pd.to_datetime(sg[col], errors="coerce")
+
+            # Numeric conversions
+            for col in ["package_hours", "completed_test_prep_hours", "starting_score", "latest_test_score"]:
+                if col in sg.columns:
+                    sg[col] = pd.to_numeric(sg[col], errors="coerce")
+
+            # Score improvement
+            sg["score_change"] = sg["latest_test_score"] - sg["starting_score"]
+
+            # Metrics
+            sg1, sg2, sg3, sg4 = st.columns(4)
+            sg1.metric("Total Packages", len(sg))
+            has_scores = sg.dropna(subset=["starting_score", "latest_test_score"])
+            sg2.metric("With Before & After Scores", len(has_scores))
+            if len(has_scores) > 0:
+                sg3.metric("Avg Score Change", f"{has_scores['score_change'].mean():+.0f}")
+                sg4.metric("Avg Hours Completed", f"{sg['completed_test_prep_hours'].mean():.1f}")
+            else:
+                sg3.metric("Avg Score Change", "—")
+                sg4.metric("Avg Hours Completed", f"{sg['completed_test_prep_hours'].mean():.1f}" if sg["completed_test_prep_hours"].notna().any() else "—")
+
+            st.markdown("")
+
+            # Score improvement chart
+            if len(has_scores) > 0:
+                st.markdown(
+                    "<p class='section-label'>Results</p>"
+                    "<p class='section-title'>Score Changes by Student</p>",
+                    unsafe_allow_html=True,
+                )
+
+                plot_sg = has_scores[["student", "score_change"]].sort_values("score_change", ascending=True)
+                colors = ["#10b981" if x >= 0 else "#ef4444" for x in plot_sg["score_change"]]
+
+                fig_sg = go.Figure()
+                fig_sg.add_trace(go.Bar(
+                    y=plot_sg["student"],
+                    x=plot_sg["score_change"],
+                    orientation="h",
+                    marker_color=colors,
+                    text=plot_sg["score_change"].apply(lambda x: f"{x:+.0f}"),
+                    textposition="outside",
+                    textfont=dict(size=11),
+                ))
+                fig_sg.update_layout(
+                    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(family="DM Sans", color="#475569"),
+                    margin=dict(l=10, r=40, t=20, b=40),
+                    xaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Score Change"),
+                    yaxis=dict(automargin=True),
+                    height=max(400, len(plot_sg) * 30 + 80),
+                    showlegend=False,
+                )
+                st.plotly_chart(fig_sg, use_container_width=True)
+
+            # Hours utilization
+            st.markdown("")
+            st.markdown(
+                "<p class='section-label'>Utilization</p>"
+                "<p class='section-title'>Package Hours vs Completed Hours</p>",
+                unsafe_allow_html=True,
+            )
+
+            hours_df = sg.dropna(subset=["package_hours", "completed_test_prep_hours"])
+            if len(hours_df) > 0:
+                hours_df["pct_used"] = (hours_df["completed_test_prep_hours"] / hours_df["package_hours"] * 100).round(1)
+                hours_df = hours_df.sort_values("pct_used", ascending=True)
+
+                fig_hrs = go.Figure()
+                fig_hrs.add_trace(go.Bar(
+                    y=hours_df["student"], x=hours_df["package_hours"],
+                    name="Package Hours", marker_color="rgba(59,130,246,0.3)",
+                    orientation="h",
+                ))
+                fig_hrs.add_trace(go.Bar(
+                    y=hours_df["student"], x=hours_df["completed_test_prep_hours"],
+                    name="Completed Hours", marker_color="#3b82f6",
+                    orientation="h",
+                    text=hours_df["pct_used"].apply(lambda x: f"{x:.0f}%"),
+                    textposition="outside", textfont=dict(size=10),
+                ))
+                fig_hrs.update_layout(
+                    barmode="overlay",
+                    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(family="DM Sans", color="#475569"),
+                    legend=dict(orientation="h", y=1.05, x=0.5, xanchor="center", font=dict(size=11)),
+                    margin=dict(l=10, r=40, t=30, b=40),
+                    xaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Hours"),
+                    yaxis=dict(automargin=True),
+                    height=max(400, len(hours_df) * 30 + 80),
+                )
+                st.plotly_chart(fig_hrs, use_container_width=True)
+
+            # Detail table
+            st.markdown("")
+            st.markdown(
+                "<p class='section-label'>Detail</p>"
+                "<p class='section-title'>All Score Guarantee Packages</p>",
+                unsafe_allow_html=True,
+            )
+
+            display_cols = ["student", "tutor", "advisor", "won_at", "package_hours",
+                            "completed_test_prep_hours", "subjects_covered",
+                            "starting_score", "latest_test_score", "score_change",
+                            "exams_since_tutoring"]
+            display_cols = [c for c in display_cols if c in sg.columns]
+            sg_display = sg[display_cols].copy()
+
+            rename_map = {
+                "student": "Student", "tutor": "Tutor", "advisor": "Advisor",
+                "won_at": "Won Date", "package_hours": "Pkg Hours",
+                "completed_test_prep_hours": "Completed Hrs", "subjects_covered": "Subjects",
+                "starting_score": "Start Score", "latest_test_score": "Latest Score",
+                "score_change": "Change", "exams_since_tutoring": "Exams After",
+            }
+            sg_display = sg_display.rename(columns=rename_map)
+            if "Won Date" in sg_display.columns:
+                sg_display["Won Date"] = sg_display["Won Date"].dt.strftime("%Y-%m-%d")
+
+            sg_display = sg_display.sort_values("Won Date", ascending=False) if "Won Date" in sg_display.columns else sg_display
+
+            st.dataframe(sg_display, hide_index=True, use_container_width=True,
+                         height=min(600, len(sg_display) * 35 + 60))
+
+            # Fetched at
+            if "fetched_at" in df_sg.columns:
+                st.markdown(
+                    f"<p style='color:#94a3b8; font-size:0.75rem; margin-top:16px;'>"
+                    f"Data last synced: {df_sg['fetched_at'].iloc[0]}</p>",
+                    unsafe_allow_html=True,
+                )
 
     # ══════════════════════════════════════════════════════════════════════════
     # PAGE — FULL ROSTER
