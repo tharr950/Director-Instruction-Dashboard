@@ -501,6 +501,86 @@ def render_app(config):
 
     st.markdown("")
 
+    # ── Score Improvement Alert ───────────────────────────────────────────────
+    if not df_sg.empty and not df_sg_exams.empty:
+        sg_scores = df_sg.copy()
+        sg_scores["starting_score"] = pd.to_numeric(sg_scores["starting_score"], errors="coerce")
+
+        score_concerns = []
+        for _, row in sg_scores.iterrows():
+            sid = row["student_id"]
+            baseline = row["starting_score"]
+            if pd.isna(baseline):
+                continue
+
+            if sid not in df_sg_exams["student_id"].values:
+                continue
+
+            stu_exams = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
+            stu_exams["exam_date"] = pd.to_datetime(stu_exams["exam_date"], errors="coerce")
+            stu_exams["score"] = pd.to_numeric(stu_exams["score"], errors="coerce")
+            after_exams = stu_exams[
+                (stu_exams["before_or_after_tutoring"] == "after")
+                & stu_exams["score"].notna()
+            ].sort_values("exam_date")
+
+            if len(after_exams) == 0:
+                continue
+
+            most_recent = after_exams.iloc[-1]["score"]
+            avg_score = after_exams["score"].mean()
+            recent_vs_baseline = most_recent - baseline
+            avg_vs_baseline = avg_score - baseline
+
+            # Flag if most recent score is at or below baseline
+            if recent_vs_baseline <= 0:
+                # Determine trend across exams
+                if len(after_exams) >= 2:
+                    first_after = after_exams.iloc[0]["score"]
+                    if most_recent > first_after:
+                        trend = "📈 trending up"
+                    elif most_recent < first_after:
+                        trend = "📉 trending down"
+                    else:
+                        trend = "➡️ flat"
+                else:
+                    trend = "—"
+
+                score_concerns.append({
+                    "student": row.get("student", "Unknown"),
+                    "advisor": row.get("advisor", "Unknown"),
+                    "tutor": row.get("tutor", "Unknown"),
+                    "baseline": baseline,
+                    "most_recent": most_recent,
+                    "recent_change": recent_vs_baseline,
+                    "avg_score": avg_score,
+                    "avg_change": avg_vs_baseline,
+                    "num_exams": len(after_exams),
+                    "trend": trend,
+                })
+
+        if len(score_concerns) > 0:
+            st.markdown(
+                "<div style='background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:16px 20px; margin-bottom:16px;'>"
+                "<p style='color:#991b1b; font-weight:600; font-size:0.85rem; margin:0 0 8px 0;'>"
+                "⚠️ SCORE ALERT — Students not showing improvement over baseline</p>",
+                unsafe_allow_html=True,
+            )
+            for sc in score_concerns:
+                st.markdown(
+                    f"<p style='color:#991b1b; margin:2px 0; font-size:0.85rem;'>"
+                    f"&nbsp;&nbsp;&nbsp;&nbsp;• <b>{sc['student']}</b> — "
+                    f"Advisor: {sc['advisor']} — "
+                    f"Tutor: {sc['tutor']} — "
+                    f"Baseline: {sc['baseline']:.0f} → "
+                    f"Latest: {sc['most_recent']:.0f} ({sc['recent_change']:+.0f}) — "
+                    f"Avg: {sc['avg_score']:.0f} ({sc['avg_change']:+.0f}) — "
+                    f"{sc['num_exams']} exams — {sc['trend']}</p>",
+                    unsafe_allow_html=True,
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
+
+
     # ══════════════════════════════════════════════════════════════════════════
     # PAGE — TEAM COUNTS
     # ══════════════════════════════════════════════════════════════════════════
