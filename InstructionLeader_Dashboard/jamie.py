@@ -653,6 +653,65 @@ def render_app(config):
             unsafe_allow_html=True,
         )
 
+        # ── Repeat Restriction Alerts ─────────────────────────────────────────
+        if not df_restricted.empty:
+            today = pd.Timestamp.now()
+            one_year_ago = today - pd.DateOffset(years=1)
+            six_months_ago = today - pd.DateOffset(months=6)
+
+            restr = df_restricted.copy()
+            restr["status_starts_at"] = pd.to_datetime(restr["status_starts_at"], errors="coerce")
+
+            # 3+ times in past year
+            past_year = restr[restr["status_starts_at"] >= one_year_ago]
+            year_counts = past_year.groupby(["employee_name", "team"]).size().reset_index(name="count")
+            flagged_year = year_counts[year_counts["count"] >= 3].sort_values("employee_name")
+
+            # 2+ times in past 6 months
+            past_6mo = restr[restr["status_starts_at"] >= six_months_ago]
+            mo6_counts = past_6mo.groupby(["employee_name", "team"]).size().reset_index(name="count")
+            flagged_6mo = mo6_counts[mo6_counts["count"] >= 2].sort_values("employee_name")
+
+            year_html = ""
+            if len(flagged_year) > 0:
+                items = ""
+                for _, row in flagged_year.iterrows():
+                    items += (
+                        f"<p style='color:#991b1b; margin:2px 0; font-size:0.82rem;'>"
+                        f"• <b>{row['employee_name']}</b> — {row['team']} — "
+                        f"{int(row['count'])}x in past year</p>"
+                    )
+                year_html = (
+                    "<div style='background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px 16px; height:100%;'>"
+                    "<p style='color:#991b1b; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
+                    "🔴 3+ RESTRICTIONS IN PAST YEAR</p>"
+                    f"{items}</div>"
+                )
+
+            mo6_html = ""
+            if len(flagged_6mo) > 0:
+                items = ""
+                for _, row in flagged_6mo.iterrows():
+                    items += (
+                        f"<p style='color:#92400e; margin:2px 0; font-size:0.82rem;'>"
+                        f"• <b>{row['employee_name']}</b> — {row['team']} — "
+                        f"{int(row['count'])}x in past 6 months</p>"
+                    )
+                mo6_html = (
+                    "<div style='background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:14px 16px; height:100%;'>"
+                    "<p style='color:#92400e; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
+                    "🟡 2+ RESTRICTIONS IN PAST 6 MONTHS</p>"
+                    f"{items}</div>"
+                )
+
+            active_alerts = [h for h in [year_html, mo6_html] if h]
+            if active_alerts:
+                cols = st.columns(len(active_alerts))
+                for i, html in enumerate(active_alerts):
+                    with cols[i]:
+                        st.markdown(html, unsafe_allow_html=True)
+                st.markdown("")
+
         # Current restricted tutors
         currently_restricted = df_restricted[df_restricted["current_status_flag"] == 1].copy()
 
