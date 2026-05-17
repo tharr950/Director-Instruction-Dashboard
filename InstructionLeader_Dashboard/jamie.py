@@ -849,6 +849,19 @@ def render_app(config):
                 "🟡 2+ restrictions in past 6 months</p>",
                 unsafe_allow_html=True,
             )
+
+            cf1, cf2 = st.columns(2)
+            with cf1:
+                curr_teams = sorted(curr_display["Team"].dropna().unique())
+                sel_curr_team = st.multiselect("Filter by Team", curr_teams, key="curr_restr_team")
+            with cf2:
+                curr_tutors = sorted(curr_display["Tutor"].dropna().unique())
+                sel_curr_tutor = st.multiselect("Filter by Tutor", curr_tutors, key="curr_restr_tutor")
+            if sel_curr_team:
+                curr_display = curr_display[curr_display["Team"].isin(sel_curr_team)]
+            if sel_curr_tutor:
+                curr_display = curr_display[curr_display["Tutor"].isin(sel_curr_tutor)]
+
             st.dataframe(curr_display, hide_index=True, use_container_width=True)
 
         else:
@@ -924,9 +937,17 @@ def render_app(config):
                 unsafe_allow_html=True,
             )
 
-            restr_search = st.text_input("🔍 Search tutor", placeholder="Type to filter...", key="restr_search")
-            if restr_search:
-                hist_display = hist_display[hist_display["Tutor"].str.contains(restr_search, case=False, na=False)]
+            hf1, hf2 = st.columns(2)
+            with hf1:
+                hist_teams = sorted(hist_display["Team"].dropna().unique())
+                sel_hist_team = st.multiselect("Filter by Team", hist_teams, key="hist_restr_team")
+            with hf2:
+                hist_tutors = sorted(hist_display["Tutor"].dropna().unique())
+                sel_hist_tutor = st.multiselect("Filter by Tutor", hist_tutors, key="hist_restr_tutor")
+            if sel_hist_team:
+                hist_display = hist_display[hist_display["Team"].isin(sel_hist_team)]
+            if sel_hist_tutor:
+                hist_display = hist_display[hist_display["Tutor"].isin(sel_hist_tutor)]
 
             st.dataframe(hist_display, hide_index=True, use_container_width=True,
                          height=min(600, len(hist_display) * 35 + 60))
