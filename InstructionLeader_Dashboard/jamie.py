@@ -65,6 +65,7 @@ def render_app(config):
         SELECT DISTINCT
             e1.id AS tutor_id,
             t_users.first_name||' '||t_users.last_name AS tutor,
+            t_users.email AS tutor_email,
             m_users.first_name||' '||m_users.last_name AS manager,
             date(e1.hire_date) AS hire_date,
             tiers.name AS tier,
@@ -1886,11 +1887,11 @@ def render_app(config):
         )
 
         roster = (
-            filt[["tutor", "manager", "tier", "tutor_type", "brand_composition",
+            filt[["tutor", "tutor_email", "manager", "tier", "tutor_type", "brand_composition",
                   "delivery_target", "hire_date", "tenure_years"]]
             .rename(columns={
-                "tutor": "Tutor", "manager": "Faculty Leader", "tier": "Tier",
-                "tutor_type": "Type", "brand_composition": "Brand",
+                "tutor": "Tutor", "tutor_email": "Email", "manager": "Faculty Leader",
+                "tier": "Tier", "tutor_type": "Type", "brand_composition": "Brand",
                 "delivery_target": "Del. Target", "hire_date": "Hire Date",
                 "tenure_years": "Tenure (yr)",
             })
@@ -1898,16 +1899,68 @@ def render_app(config):
         )
         roster["Hire Date"] = roster["Hire Date"].dt.strftime("%Y-%m-%d")
 
-        search = st.text_input("🔍 Search tutor name", placeholder="Type to filter...")
-        if search:
-            roster = roster[roster["Tutor"].str.contains(search, case=False, na=False)]
+        # Filters
+        rf1, rf2, rf3 = st.columns(3)
+        with rf1:
+            r_tutors = sorted(roster["Tutor"].dropna().unique())
+            sel_r_tutor = st.multiselect("Filter by Tutor", r_tutors, key="roster_tutor")
+        with rf2:
+            r_fls = sorted(roster["Faculty Leader"].dropna().unique())
+            sel_r_fl = st.multiselect("Filter by Faculty Leader", r_fls, key="roster_fl")
+        with rf3:
+            r_tiers = sorted(roster["Tier"].dropna().unique())
+            sel_r_tier = st.multiselect("Filter by Tier", r_tiers, key="roster_tier")
+
+        rf4, rf5, rf6 = st.columns(3)
+        with rf4:
+            r_types = sorted(roster["Type"].dropna().unique())
+            sel_r_type = st.multiselect("Filter by Type", r_types, key="roster_type")
+        with rf5:
+            r_targets = sorted(roster["Del. Target"].dropna().unique())
+            sel_r_target = st.multiselect("Filter by Del. Target", r_targets, key="roster_target")
+        with rf6:
+            r_brands = sorted(roster["Brand"].dropna().unique())
+            sel_r_brand = st.multiselect("Filter by Brand", r_brands, key="roster_brand")
+
+        if sel_r_tutor:
+            roster = roster[roster["Tutor"].isin(sel_r_tutor)]
+        if sel_r_fl:
+            roster = roster[roster["Faculty Leader"].isin(sel_r_fl)]
+        if sel_r_tier:
+            roster = roster[roster["Tier"].isin(sel_r_tier)]
+        if sel_r_type:
+            roster = roster[roster["Type"].isin(sel_r_type)]
+        if sel_r_target:
+            roster = roster[roster["Del. Target"].isin(sel_r_target)]
+        if sel_r_brand:
+            roster = roster[roster["Brand"].isin(sel_r_brand)]
 
         st.dataframe(roster, hide_index=True, use_container_width=True,
                      height=min(700, len(roster) * 35 + 60))
 
+        # Email list for Outlook
+        emails = roster["Email"].dropna().unique().tolist()
+        if emails:
+            email_str = "; ".join(sorted(emails))
+            st.markdown("")
+            st.markdown(
+                f"<p class='section-label'>Email List ({len(emails)} tutors)</p>",
+                unsafe_allow_html=True,
+            )
+            st.code(email_str, language=None)
+            st.download_button(
+                "📥 Copy Email List as TXT",
+                data=email_str,
+                file_name=f"tutor_emails_{date.today().isoformat()}.txt",
+                mime="text/plain",
+                key="email_download",
+            )
+
+        st.markdown("")
         st.download_button(
             "📥 Download Roster CSV",
             data=roster.to_csv(index=False).encode("utf-8"),
             file_name=f"tutor_roster_{date.today().isoformat()}.csv",
             mime="text/csv",
+            key="roster_download",
         )
