@@ -850,17 +850,21 @@ def render_app(config):
                 unsafe_allow_html=True,
             )
 
-            cf1, cf2 = st.columns(2)
+            cf1, cf2, cf3 = st.columns([2, 2, 1])
             with cf1:
                 curr_teams = sorted(curr_display["Team"].dropna().unique())
                 sel_curr_team = st.multiselect("Filter by Team", curr_teams, key="curr_restr_team")
             with cf2:
                 curr_tutors = sorted(curr_display["Tutor"].dropna().unique())
                 sel_curr_tutor = st.multiselect("Filter by Tutor", curr_tutors, key="curr_restr_tutor")
+            with cf3:
+                show_flagged_curr = st.checkbox("Flagged only", key="curr_flagged_only")
             if sel_curr_team:
                 curr_display = curr_display[curr_display["Team"].isin(sel_curr_team)]
             if sel_curr_tutor:
                 curr_display = curr_display[curr_display["Tutor"].isin(sel_curr_tutor)]
+            if show_flagged_curr:
+                curr_display = curr_display[curr_display["Flag"] != ""]
 
             st.dataframe(curr_display, hide_index=True, use_container_width=True)
 
@@ -937,17 +941,21 @@ def render_app(config):
                 unsafe_allow_html=True,
             )
 
-            hf1, hf2 = st.columns(2)
+            hf1, hf2, hf3 = st.columns([2, 2, 1])
             with hf1:
                 hist_teams = sorted(hist_display["Team"].dropna().unique())
                 sel_hist_team = st.multiselect("Filter by Team", hist_teams, key="hist_restr_team")
             with hf2:
                 hist_tutors = sorted(hist_display["Tutor"].dropna().unique())
                 sel_hist_tutor = st.multiselect("Filter by Tutor", hist_tutors, key="hist_restr_tutor")
+            with hf3:
+                show_flagged_hist = st.checkbox("Flagged only", key="hist_flagged_only")
             if sel_hist_team:
                 hist_display = hist_display[hist_display["Team"].isin(sel_hist_team)]
             if sel_hist_tutor:
                 hist_display = hist_display[hist_display["Tutor"].isin(sel_hist_tutor)]
+            if show_flagged_hist:
+                hist_display = hist_display[hist_display["Flag"] != ""]
 
             st.dataframe(hist_display, hide_index=True, use_container_width=True,
                          height=min(600, len(hist_display) * 35 + 60))
@@ -1164,11 +1172,13 @@ def render_app(config):
 
         mtg_fl_options = sorted(mtg["faculty_leader"].dropna().unique())
         mtg_tutor_options = sorted(mtg["tutor"].dropna().unique())
-        mf1, mf2 = st.columns(2)
+        mf1, mf2, mf3 = st.columns([2, 2, 1])
         with mf1:
             sel_mtg_fl = st.multiselect("Filter by Faculty Leader", mtg_fl_options, key="mtg_fl_filter")
         with mf2:
             sel_mtg_tutor = st.multiselect("Filter by Tutor", mtg_tutor_options, key="mtg_tutor_filter")
+        with mf3:
+            show_flagged_mtg = st.checkbox("Flagged only", key="mtg_flagged_only")
 
         mtg_display = (
             mtg[["faculty_leader", "tutor", "tutor_type", "attended_1on1_meetings",
@@ -1188,6 +1198,8 @@ def render_app(config):
             mtg_display = mtg_display[mtg_display["Faculty Leader"].isin(sel_mtg_fl)]
         if sel_mtg_tutor:
             mtg_display = mtg_display[mtg_display["Tutor"].isin(sel_mtg_tutor)]
+        if show_flagged_mtg:
+            mtg_display = mtg_display[mtg_display["Flag"] != ""]
 
         # Add flag column
         def get_flag(tutor_name):
@@ -1219,6 +1231,13 @@ def render_app(config):
             "<p class='section-title'>Team KPI Comparison</p>",
             unsafe_allow_html=True,
         )
+
+        if not df_kpi.empty and "fetched_at" not in df_kpi.columns:
+            st.markdown(
+                "<p style='color:#64748b; font-size:0.82rem; margin-top:-12px;'>"
+                "Source: Dashboard_Metrics.xlsx</p>",
+                unsafe_allow_html=True,
+            )
 
         if df_kpi.empty:
             st.warning("Dashboard_Metrics.xlsx not found or empty.")
@@ -1468,12 +1487,18 @@ def render_app(config):
                 )
 
             # Render alerts horizontally
-            active_alerts = [h for h in [no_baseline_html, behind_html, score_html] if h]
+            alert_configs = [
+                ("⚠️ No Baseline Score", no_baseline_html, len(no_baseline) if len(no_baseline) > 0 else 0),
+                ("⚠️ Behind on Practice Tests", behind_html, len(behind_on_exams)),
+                ("⚠️ No Score Improvement", score_html, len(score_concerns)),
+            ]
+            active_alerts = [(label, html, cnt) for label, html, cnt in alert_configs if html]
             if active_alerts:
                 cols = st.columns(len(active_alerts))
-                for i, html in enumerate(active_alerts):
+                for i, (label, html, cnt) in enumerate(active_alerts):
                     with cols[i]:
-                        st.markdown(html, unsafe_allow_html=True)
+                        with st.expander(f"{label} ({cnt})", expanded=False):
+                            st.markdown(html, unsafe_allow_html=True)
                 st.markdown("")
             sg = df_sg.copy()
             for col in ["won_at", "first_test_prep_session", "starting_test_taken", "last_test_taken"]:
