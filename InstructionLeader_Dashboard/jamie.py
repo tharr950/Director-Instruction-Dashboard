@@ -100,10 +100,10 @@ def render_app(config):
 
     @st.cache_data(ttl=3600)
     @st.cache_data(ttl=3600)
-    def load_meeting_data():
+    def load_meeting_data(lookback_months=24):
         today = date.today()
         day_end = today.strftime("%Y-%m-%d")
-        day_start = (today - pd.DateOffset(years=2)).strftime("%Y-%m-%d")
+        day_start = (today - pd.DateOffset(months=lookback_months)).strftime("%Y-%m-%d")
         query = f"""
         WITH time_period AS (
           SELECT '{day_start}'::date AS day_start, '{day_end}'::date AS day_end
@@ -874,13 +874,31 @@ def render_app(config):
     # PAGE — MEETINGS
     # ══════════════════════════════════════════════════════════════════════════
     elif page == "📅 Meetings":
+
+        mtg_range_options = {
+            "Past 2 Years": 24,
+            "Past Year": 12,
+            "Past 6 Months": 6,
+            "Past 3 Months": 3,
+            "Past Month": 1,
+        }
+        sel_range = st.selectbox("Date Range", list(mtg_range_options.keys()), index=0, key="mtg_range")
+        sel_months = mtg_range_options[sel_range]
+
+        df_meetings_filtered = load_meeting_data(lookback_months=sel_months)
+
+        from dateutil.relativedelta import relativedelta
+        range_start = (date.today() - relativedelta(months=sel_months)).strftime("%B %d, %Y")
+        range_end = date.today().strftime("%B %d, %Y")
+
         st.markdown(
-            "<p class='section-label'>Meeting Frequency</p>"
-            "<p class='section-title'>1-on-1 & Group Meetings (Jan–Apr 2026)</p>",
+            f"<p class='section-label'>Meeting Frequency</p>"
+            f"<p class='section-title'>1-on-1 & Group Meetings</p>"
+            f"<p style='color:#64748b; font-size:0.82rem; margin-top:-12px;'>Showing data from {range_start} to {range_end}</p>",
             unsafe_allow_html=True,
         )
 
-        mtg = df_meetings[df_meetings["faculty_leader"].isin(selected_managers)].copy()
+        mtg = df_meetings_filtered[df_meetings_filtered["faculty_leader"].isin(selected_managers)].copy()
 
         mm1, mm2, mm3, mm4 = st.columns(4)
         mm1.metric("Avg 1:1s per Tutor", f"{mtg['attended_1on1_meetings'].mean():.1f}")
