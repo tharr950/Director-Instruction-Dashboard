@@ -672,7 +672,7 @@ def render_app(config):
         sel_restr_range = st.selectbox("Date Range", list(restr_range_options.keys()), index=1, key="restr_range")
         sel_restr_months = restr_range_options[sel_restr_range]
 
-        restr_range_start = (date.today() - relativedelta(months=sel_restr_months)).strftime("%B %d, %Y")
+        restr_range_start = (pd.Timestamp.now() - pd.DateOffset(months=sel_restr_months)).strftime("%B %d, %Y")
         restr_range_end = date.today().strftime("%B %d, %Y")
 
         st.markdown(
@@ -829,7 +829,7 @@ def render_app(config):
                     "update_type": "Set By", "status_starts_at": "Restricted Since",
                     "days_in_effect": "Days Restricted",
                 })
-                .sort_values("Days Restricted", ascending=False)
+                .sort_values("Tutor")
             )
             curr_display["Restricted Since"] = curr_display["Restricted Since"].dt.strftime("%Y-%m-%d")
             curr_display["Days Restricted"] = curr_display["Days Restricted"].astype(int)
@@ -884,7 +884,7 @@ def render_app(config):
                 )
                 .reset_index()
                 .rename(columns={"team": "Team"})
-                .sort_values("events", ascending=False)
+                .sort_values("Team")
             )
             hist_by_team["avg_days"] = hist_by_team["avg_days"].round(0).astype(int)
 
@@ -907,7 +907,7 @@ def render_app(config):
                     "status_ends_at": "End", "days_in_effect": "Days",
                     "current_status_flag": "Current",
                 })
-                .sort_values("Start", ascending=False)
+                .sort_values(["Tutor", "Start"], ascending=[True, False])
             )
             hist_display["Start"] = hist_display["Start"].dt.strftime("%Y-%m-%d")
             hist_display["End"] = hist_display["End"].dt.strftime("%Y-%m-%d").fillna("Present")
@@ -948,7 +948,7 @@ def render_app(config):
         df_meetings_filtered = load_meeting_data(lookback_months=sel_months)
 
         from dateutil.relativedelta import relativedelta
-        range_start = (date.today() - relativedelta(months=sel_months)).strftime("%B %d, %Y")
+        range_start = (pd.Timestamp.now() - pd.DateOffset(months=sel_months)).strftime("%B %d, %Y")
         range_end = date.today().strftime("%B %d, %Y")
 
         st.markdown(

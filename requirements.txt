@@ -4,4 +4,3 @@ numpy
 psycopg2-binary
 plotly
 openpyxl
-python-dateutil
