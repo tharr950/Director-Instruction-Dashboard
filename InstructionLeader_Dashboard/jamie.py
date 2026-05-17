@@ -291,7 +291,12 @@ def render_app(config):
     def load_dashboard_metrics():
         file = "Dashboard_Metrics.xlsx"
         if os.path.exists(file):
-            return pd.read_excel(file, sheet_name="MonthlyMetricFullData", header=3)
+            # Read header row 0 to get date range from first column name
+            raw = pd.read_excel(file, sheet_name="MonthlyMetricFullData", header=0, nrows=0)
+            date_range_str = raw.columns[0] if len(raw.columns) > 0 else ""
+            df = pd.read_excel(file, sheet_name="MonthlyMetricFullData", header=3)
+            df.attrs["kpi_date_range"] = date_range_str
+            return df
         return pd.DataFrame()
 
     @st.cache_data(ttl=3600)
@@ -863,7 +868,12 @@ def render_app(config):
                 curr_display = curr_display[curr_display["Team"].isin(sel_curr_team)]
             if sel_curr_tutor:
                 curr_display = curr_display[curr_display["Tutor"].isin(sel_curr_tutor)]
-
+            if show_flagged_curr == "🔴 3+ / Year":
+                curr_display = curr_display[curr_display["Flag"] == "🔴"]
+            elif show_flagged_curr == "🟡 2+ / 6mo":
+                curr_display = curr_display[curr_display["Flag"] == "🟡"]
+            elif show_flagged_curr == "All Flagged":
+                curr_display = curr_display[curr_display["Flag"] != ""]
 
             st.dataframe(curr_display, hide_index=True, use_container_width=True)
 
@@ -1236,19 +1246,11 @@ def render_app(config):
         )
 
         if not df_kpi.empty:
-            import os as _os
-            kpi_path = "Dashboard_Metrics.xlsx"
-            try:
-                mod_time = _os.path.getmtime(kpi_path)
-                from datetime import datetime as _dt
-                kpi_updated = _dt.fromtimestamp(mod_time).strftime("%B %d, %Y at %I:%M %p")
-            except Exception:
-                kpi_updated = "unknown"
+            kpi_date_range = df_kpi.attrs.get("kpi_date_range", "")
             st.markdown(
                 f"<div style='background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:10px 16px; margin-bottom:16px;'>"
                 f"<p style='color:#0369a1; font-size:0.82rem; margin:0;'>"
-                f"📊 <b>Data Source:</b> Dashboard_Metrics.xlsx — Current period snapshot — "
-                f"File last modified: {kpi_updated}</p></div>",
+                f"📊 <b>Date Range:</b> {kpi_date_range}</p></div>",
                 unsafe_allow_html=True,
             )
 
