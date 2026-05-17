@@ -1433,11 +1433,14 @@ def render_app(config):
                 items = ""
                 for b in behind_on_exams:
                     items += (
-                        f"<p style='color:#92400e; margin:2px 0; font-size:0.82rem;'>"
-                        f"• <b>{b['student']}</b><br>"
-                        f"&nbsp;&nbsp;Advisor: {b['advisor']} | Tutor: {b['tutor']}<br>"
-                        f"&nbsp;&nbsp;{b['exams_taken']}/{b['exams_expected']} exams "
-                        f"({b['completed']:.0f}/{b['pkg_hrs']:.0f} hrs)</p>"
+                        f"<div style='background:white; border:1px solid #fde68a; border-radius:6px; padding:8px 12px; margin:6px 0;'>"
+                        f"<p style='color:#1e293b; font-weight:600; font-size:0.85rem; margin:0;'>{b['student']}</p>"
+                        f"<table style='width:100%; font-size:0.78rem; color:#64748b; margin-top:4px;'>"
+                        f"<tr><td style='padding:1px 0;'>Advisor</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{b['advisor']}</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Tutor</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{b['tutor']}</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Exams</td><td style='padding:1px 0; text-align:right; color:#92400e; font-weight:600;'>{b['exams_taken']}/{b['exams_expected']} taken</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Hours</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{b['completed']:.0f}/{b['pkg_hrs']:.0f} hrs</td></tr>"
+                        f"</table></div>"
                     )
                 behind_html = items
 
@@ -1484,11 +1487,14 @@ def render_app(config):
                 items = ""
                 for sc in score_concerns:
                     items += (
-                        f"<p style='color:#991b1b; margin:2px 0; font-size:0.82rem;'>"
-                        f"• <b>{sc['student']}</b><br>"
-                        f"&nbsp;&nbsp;Advisor: {sc['advisor']} | Tutor: {sc['tutor']}<br>"
-                        f"&nbsp;&nbsp;Baseline: {sc['baseline']:.0f} → Latest: {sc['most_recent']:.0f} "
-                        f"({sc['recent_change']:+.0f}) | {sc['num_exams']} exams {sc['trend']}</p>"
+                        f"<div style='background:white; border:1px solid #fecaca; border-radius:6px; padding:8px 12px; margin:6px 0;'>"
+                        f"<p style='color:#1e293b; font-weight:600; font-size:0.85rem; margin:0;'>{sc['student']}</p>"
+                        f"<table style='width:100%; font-size:0.78rem; color:#64748b; margin-top:4px;'>"
+                        f"<tr><td style='padding:1px 0;'>Advisor</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{sc['advisor']}</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Tutor</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{sc['tutor']}</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Scores</td><td style='padding:1px 0; text-align:right; color:#991b1b; font-weight:600;'>{sc['baseline']:.0f} → {sc['most_recent']:.0f} ({sc['recent_change']:+.0f})</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Exams / Trend</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{sc['num_exams']} exams {sc['trend']}</td></tr>"
+                        f"</table></div>"
                     )
                 score_html = items
 
