@@ -842,12 +842,6 @@ def render_app(config):
                     return "🟡"
                 return ""
             curr_display.insert(0, "Flag", curr_display["Tutor"].apply(get_restr_flag))
-            if show_flagged_curr == "🔴 3+ / Year":
-                curr_display = curr_display[curr_display["Flag"] == "🔴"]
-            elif show_flagged_curr == "🟡 2+ / 6mo":
-                curr_display = curr_display[curr_display["Flag"] == "🟡"]
-            elif show_flagged_curr == "All Flagged":
-                curr_display = curr_display[curr_display["Flag"] != ""]
 
             st.markdown(
                 "<p style='font-size:0.78rem; color:#64748b; margin-bottom:8px;'>"
@@ -938,12 +932,6 @@ def render_app(config):
 
             # Add flag
             hist_display.insert(0, "Flag", hist_display["Tutor"].apply(get_restr_flag))
-            if show_flagged_hist == "🔴 3+ / Year":
-                hist_display = hist_display[hist_display["Flag"] == "🔴"]
-            elif show_flagged_hist == "🟡 2+ / 6mo":
-                hist_display = hist_display[hist_display["Flag"] == "🟡"]
-            elif show_flagged_hist == "All Flagged":
-                hist_display = hist_display[hist_display["Flag"] != ""]
 
             st.markdown(
                 "<p style='font-size:0.78rem; color:#64748b; margin-bottom:8px;'>"
@@ -1248,13 +1236,19 @@ def render_app(config):
         )
 
         if not df_kpi.empty:
-            # Check for hire dates to determine data range
-            kpi_dates = pd.to_datetime(df_kpi["Hire Date"], errors="coerce")
-            kpi_note = "Source: Dashboard_Metrics.xlsx"
-            if "fetched_at" in df_kpi.columns:
-                kpi_note += f" — Last updated: {df_kpi['fetched_at'].iloc[0]}"
+            import os as _os
+            kpi_path = "Dashboard_Metrics.xlsx"
+            try:
+                mod_time = _os.path.getmtime(kpi_path)
+                from datetime import datetime as _dt
+                kpi_updated = _dt.fromtimestamp(mod_time).strftime("%B %d, %Y at %I:%M %p")
+            except Exception:
+                kpi_updated = "unknown"
             st.markdown(
-                f"<p style='color:#64748b; font-size:0.82rem; margin-top:-12px;'>{kpi_note}</p>",
+                f"<div style='background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:10px 16px; margin-bottom:16px;'>"
+                f"<p style='color:#0369a1; font-size:0.82rem; margin:0;'>"
+                f"📊 <b>Data Source:</b> Dashboard_Metrics.xlsx — Current period snapshot — "
+                f"File last modified: {kpi_updated}</p></div>",
                 unsafe_allow_html=True,
             )
 
