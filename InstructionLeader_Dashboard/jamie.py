@@ -909,19 +909,25 @@ def render_app(config):
 
         st.markdown("")
 
-        # ── Meeting Alerts ────────────────────────────────────────────────────
-        mtg["hire_date"] = pd.to_datetime(mtg["hire_date"], errors="coerce")
+        # ── Meeting Alerts (always based on full 2-year data) ─────────────────
+        mtg_full = load_meeting_data(lookback_months=24)
+        mtg_full = mtg_full[mtg_full["faculty_leader"].isin(selected_managers)].copy()
+        mtg_full["hire_date"] = pd.to_datetime(mtg_full["hire_date"], errors="coerce")
         today_ts = pd.Timestamp.now()
+        mtg_full["days_employed"] = (today_ts - mtg_full["hire_date"]).dt.days
+
+        # Also add days_employed to mtg for display
+        mtg["hire_date"] = pd.to_datetime(mtg["hire_date"], errors="coerce")
         mtg["days_employed"] = (today_ts - mtg["hire_date"]).dt.days
 
         # New tutors (< 100 days) without 1-on-1 in 3 weeks (21 days)
-        new_tutors = mtg[mtg["days_employed"] < 100].copy()
+        new_tutors = mtg_full[mtg_full["days_employed"] < 100].copy()
         new_overdue = new_tutors[
             (new_tutors["days_since_last_1on1"] > 21) | (new_tutors["days_since_last_1on1"].isna())
         ].sort_values("tutor")
 
         # Veteran tutors (>= 100 days) without 1-on-1 in 8 weeks (56 days)
-        vet_tutors = mtg[mtg["days_employed"] >= 100].copy()
+        vet_tutors = mtg_full[mtg_full["days_employed"] >= 100].copy()
         vet_overdue = vet_tutors[
             (vet_tutors["days_since_last_1on1"] > 56) | (vet_tutors["days_since_last_1on1"].isna())
         ].sort_values("tutor")
