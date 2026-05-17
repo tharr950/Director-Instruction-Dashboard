@@ -160,17 +160,16 @@ def render_app(config):
             LEFT JOIN cte_group_meetings
                 ON cte_group_meetings.tutor_id = e_tutor.id
         LEFT JOIN (
-            SELECT teams2.manager_id AS fl_id, e_t2.id AS tutor_id,
+            SELECT s2.supervisor_id AS fl_id, e_t2.id AS tutor_id,
                    MIN(s2.starts_at) AS next_1on1
             FROM dw.courses c2
                 JOIN dw.sessions s2 ON s2.course_id = c2.id
-                JOIN dw.enrollments e2 ON e2.course_id = c2.id
+                JOIN dw.attendances a2 ON a2.session_id = s2.id
+                JOIN dw.enrollments e2 ON e2.id = a2.enrollment_id
                 JOIN dw.employees e_t2 ON e2.enrollee_id = e_t2.id
-                JOIN dw.team_members tm2 ON tm2.member_id = e_t2.id
-                JOIN dw.teams teams2 ON teams2.id = tm2.team_id
             WHERE c2.brand_id = 25
                 AND s2.starts_at > GETDATE()
-            GROUP BY teams2.manager_id, e_t2.id
+            GROUP BY s2.supervisor_id, e_t2.id
         ) next_mtg ON (next_mtg.fl_id = e_fl.id AND next_mtg.tutor_id = e_tutor.id)
         WHERE e_tutor.end_date IS NULL
             AND e_tutor.delivery_target > 0
