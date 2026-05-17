@@ -953,12 +953,24 @@ def render_app(config):
                 f"{items}</div>"
             )
 
-        active_alerts = [h for h in [new_html, vet_html] if h]
-        if active_alerts:
-            cols = st.columns(len(active_alerts))
-            for i, html in enumerate(active_alerts):
-                with cols[i]:
-                    st.markdown(html, unsafe_allow_html=True)
+        # Build sets of flagged tutors for table highlighting
+        new_overdue_names = set(new_overdue["tutor"].tolist()) if len(new_overdue) > 0 else set()
+        vet_overdue_names = set(vet_overdue["tutor"].tolist()) if len(vet_overdue) > 0 else set()
+
+        if len(new_overdue) > 0 or len(vet_overdue) > 0:
+            ac1, ac2 = st.columns(2)
+            with ac1:
+                with st.expander(f"🔴 New Tutors — No 1:1 in 3+ weeks ({len(new_overdue)})", expanded=False):
+                    if len(new_overdue) > 0:
+                        st.markdown(new_html, unsafe_allow_html=True)
+                    else:
+                        st.success("All new tutors are up to date.")
+            with ac2:
+                with st.expander(f"🟡 Veteran Tutors — No 1:1 in 8+ weeks ({len(vet_overdue)})", expanded=False):
+                    if len(vet_overdue) > 0:
+                        st.markdown(vet_html, unsafe_allow_html=True)
+                    else:
+                        st.success("All veteran tutors are up to date.")
             st.markdown("")
 
         fl_mtg_summary = (
@@ -1072,8 +1084,23 @@ def render_app(config):
         if sel_mtg_tutor:
             mtg_display = mtg_display[mtg_display["Tutor"].isin(sel_mtg_tutor)]
 
+        # Add flag column
+        def get_flag(tutor_name):
+            if tutor_name in new_overdue_names:
+                return "🔴"
+            elif tutor_name in vet_overdue_names:
+                return "🟡"
+            return ""
+        mtg_display.insert(0, "Flag", mtg_display["Tutor"].apply(get_flag))
 
 
+
+        st.markdown(
+            "<p style='font-size:0.78rem; color:#64748b; margin-bottom:8px;'>"
+            "🔴 New tutor (&lt;100 days) — no 1:1 in 3+ weeks &nbsp;&nbsp;|&nbsp;&nbsp; "
+            "🟡 Veteran tutor — no 1:1 in 8+ weeks</p>",
+            unsafe_allow_html=True,
+        )
         st.dataframe(mtg_display, hide_index=True, use_container_width=True,
                      height=min(600, len(mtg_display) * 35 + 60))
 
