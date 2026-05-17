@@ -160,15 +160,17 @@ def render_app(config):
             LEFT JOIN cte_group_meetings
                 ON cte_group_meetings.tutor_id = e_tutor.id
         LEFT JOIN (
-            SELECT s2.supervisor_id AS fl_id, e_t2.id AS tutor_id,
+            SELECT teams2.manager_id AS fl_id, e_t2.id AS tutor_id,
                    MIN(s2.starts_at) AS next_1on1
             FROM dw.courses c2
                 JOIN dw.sessions s2 ON s2.course_id = c2.id
                 JOIN dw.enrollments e2 ON e2.course_id = c2.id
                 JOIN dw.employees e_t2 ON e2.enrollee_id = e_t2.id
+                JOIN dw.team_members tm2 ON tm2.member_id = e_t2.id
+                JOIN dw.teams teams2 ON teams2.id = tm2.team_id
             WHERE c2.brand_id = 25
                 AND s2.starts_at > GETDATE()
-            GROUP BY s2.supervisor_id, e_t2.id
+            GROUP BY teams2.manager_id, e_t2.id
         ) next_mtg ON (next_mtg.fl_id = e_fl.id AND next_mtg.tutor_id = e_tutor.id)
         WHERE e_tutor.end_date IS NULL
             AND e_tutor.delivery_target > 0
@@ -911,13 +913,17 @@ def render_app(config):
         if len(new_overdue) > 0:
             items = ""
             for _, row in new_overdue.iterrows():
-                days_since = f"{int(row['days_since_last_1on1'])} days" if pd.notna(row["days_since_last_1on1"]) else "never"
+                days_since = f"{int(row['days_since_last_1on1'])} days" if pd.notna(row["days_since_last_1on1"]) else "no meeting on record"
                 next_mtg_str = row["next_1on1"].strftime("%Y-%m-%d") if pd.notna(row.get("next_1on1")) else "none scheduled"
                 items += (
-                    f"<p style='color:#991b1b; margin:2px 0; font-size:0.82rem;'>"
-                    f"• <b>{row['tutor']}</b> — FL: {row['faculty_leader']}<br>"
-                    f"&nbsp;&nbsp;Last 1:1: {days_since} ago | Next: {next_mtg_str}<br>"
-                    f"&nbsp;&nbsp;Hired: {row['hire_date'].strftime('%Y-%m-%d')} ({int(row['days_employed'])} days)</p>"
+                    f"<div style='background:white; border:1px solid #fecaca; border-radius:6px; padding:8px 12px; margin:6px 0;'>"
+                    f"<p style='color:#1e293b; font-weight:600; font-size:0.85rem; margin:0;'>{row['tutor']}</p>"
+                    f"<table style='width:100%; font-size:0.78rem; color:#64748b; margin-top:4px;'>"
+                    f"<tr><td style='padding:1px 0;'>Faculty Leader</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{row['faculty_leader']}</td></tr>"
+                    f"<tr><td style='padding:1px 0;'>Last 1:1</td><td style='padding:1px 0; text-align:right; color:#991b1b; font-weight:600;'>{days_since} ago</td></tr>"
+                    f"<tr><td style='padding:1px 0;'>Next 1:1</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{next_mtg_str}</td></tr>"
+                    f"<tr><td style='padding:1px 0;'>Hire Date</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{row['hire_date'].strftime('%b %d, %Y')} ({int(row['days_employed'])}d)</td></tr>"
+                    f"</table></div>"
                 )
             new_html = (
                 "<div style='background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px 16px; height:100%;'>"
@@ -930,12 +936,16 @@ def render_app(config):
         if len(vet_overdue) > 0:
             items = ""
             for _, row in vet_overdue.iterrows():
-                days_since = f"{int(row['days_since_last_1on1'])} days" if pd.notna(row["days_since_last_1on1"]) else "never"
+                days_since = f"{int(row['days_since_last_1on1'])} days" if pd.notna(row["days_since_last_1on1"]) else "no meeting on record"
                 next_mtg_str = row["next_1on1"].strftime("%Y-%m-%d") if pd.notna(row.get("next_1on1")) else "none scheduled"
                 items += (
-                    f"<p style='color:#92400e; margin:2px 0; font-size:0.82rem;'>"
-                    f"• <b>{row['tutor']}</b> — FL: {row['faculty_leader']}<br>"
-                    f"&nbsp;&nbsp;Last 1:1: {days_since} ago | Next: {next_mtg_str}</p>"
+                    f"<div style='background:white; border:1px solid #fde68a; border-radius:6px; padding:8px 12px; margin:6px 0;'>"
+                    f"<p style='color:#1e293b; font-weight:600; font-size:0.85rem; margin:0;'>{row['tutor']}</p>"
+                    f"<table style='width:100%; font-size:0.78rem; color:#64748b; margin-top:4px;'>"
+                    f"<tr><td style='padding:1px 0;'>Faculty Leader</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{row['faculty_leader']}</td></tr>"
+                    f"<tr><td style='padding:1px 0;'>Last 1:1</td><td style='padding:1px 0; text-align:right; color:#92400e; font-weight:600;'>{days_since} ago</td></tr>"
+                    f"<tr><td style='padding:1px 0;'>Next 1:1</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{next_mtg_str}</td></tr>"
+                    f"</table></div>"
                 )
             vet_html = (
                 "<div style='background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:14px 16px; height:100%;'>"
@@ -1017,6 +1027,8 @@ def render_app(config):
                 y=mgr_data["days_since_last_1on1"], name=mgr, boxmean=True,
                 marker_color="#3b82f6", line_color="#2563eb",
                 fillcolor="rgba(59,130,246,0.12)",
+                text=mgr_data["tutor"],
+                hovertemplate="<b>%{text}</b><br>Days since last 1:1: %{y}<extra></extra>",
             ))
         fig_days.update_layout(
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
@@ -1034,6 +1046,14 @@ def render_app(config):
             unsafe_allow_html=True,
         )
 
+        mtg_fl_options = sorted(mtg["faculty_leader"].dropna().unique())
+        mtg_tutor_options = sorted(mtg["tutor"].dropna().unique())
+        mf1, mf2 = st.columns(2)
+        with mf1:
+            sel_mtg_fl = st.multiselect("Filter by Faculty Leader", mtg_fl_options, key="mtg_fl_filter")
+        with mf2:
+            sel_mtg_tutor = st.multiselect("Filter by Tutor", mtg_tutor_options, key="mtg_tutor_filter")
+
         mtg_display = (
             mtg[["faculty_leader", "tutor", "tutor_type", "attended_1on1_meetings",
                  "1on1_meeting_hours", "last_attended_1on1", "days_since_last_1on1",
@@ -1048,10 +1068,12 @@ def render_app(config):
         )
         mtg_display["Last 1:1"] = mtg_display["Last 1:1"].dt.strftime("%Y-%m-%d")
         mtg_display["Next 1:1"] = pd.to_datetime(mtg_display["Next 1:1"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("—")
+        if sel_mtg_fl:
+            mtg_display = mtg_display[mtg_display["Faculty Leader"].isin(sel_mtg_fl)]
+        if sel_mtg_tutor:
+            mtg_display = mtg_display[mtg_display["Tutor"].isin(sel_mtg_tutor)]
 
-        mtg_search = st.text_input("🔍 Search tutor", placeholder="Type to filter...", key="mtg_search")
-        if mtg_search:
-            mtg_display = mtg_display[mtg_display["Tutor"].str.contains(mtg_search, case=False, na=False)]
+
 
         st.dataframe(mtg_display, hide_index=True, use_container_width=True,
                      height=min(600, len(mtg_display) * 35 + 60))
