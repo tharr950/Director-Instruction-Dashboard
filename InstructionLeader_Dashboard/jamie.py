@@ -146,7 +146,8 @@ def render_app(config):
             cte_1on1_meetings.attended_meetings AS attended_1on1_meetings,
             cte_1on1_meetings.meeting_hours AS "1on1_meeting_hours",
             cte_1on1_meetings.last_attended_1on1,
-            cte_group_meetings.attended_meetings AS attended_group_meetings
+            cte_group_meetings.attended_meetings AS attended_group_meetings,
+            next_mtg.next_1on1
         FROM dw.employees e_tutor
             LEFT JOIN dw.users tutor ON e_tutor.user_id = tutor.id
             JOIN dw.team_members ON e_tutor.id = team_members.member_id
@@ -158,6 +159,17 @@ def render_app(config):
                 AND cte_1on1_meetings.tutor_id = e_tutor.id)
             LEFT JOIN cte_group_meetings
                 ON cte_group_meetings.tutor_id = e_tutor.id
+        LEFT JOIN (
+            SELECT s2.supervisor_id AS fl_id, e_t2.id AS tutor_id,
+                   MIN(s2.starts_at) AS next_1on1
+            FROM dw.courses c2
+                JOIN dw.sessions s2 ON s2.course_id = c2.id
+                JOIN dw.enrollments e2 ON e2.course_id = c2.id
+                JOIN dw.employees e_t2 ON e2.enrollee_id = e_t2.id
+            WHERE c2.brand_id = 25
+                AND s2.starts_at > GETDATE()
+            GROUP BY s2.supervisor_id, e_t2.id
+        ) next_mtg ON (next_mtg.fl_id = e_fl.id AND next_mtg.tutor_id = e_tutor.id)
         WHERE e_tutor.end_date IS NULL
             AND e_tutor.delivery_target > 0
             AND e_tutor.type = 'Tutor'
@@ -171,6 +183,7 @@ def render_app(config):
         df["1on1_meeting_hours"] = pd.to_numeric(df["1on1_meeting_hours"], errors="coerce").round(1)
         df["attended_1on1_meetings"] = df["attended_1on1_meetings"].fillna(0).astype(int)
         df["attended_group_meetings"] = df["attended_group_meetings"].fillna(0).astype(int)
+        df["next_1on1"] = pd.to_datetime(df["next_1on1"], errors="coerce")
         df["days_since_last_1on1"] = np.nan
         mask = df["last_attended_1on1"].notna()
         df.loc[mask, "days_since_last_1on1"] = (pd.Timestamp.now() - df.loc[mask, "last_attended_1on1"]).dt.days
@@ -877,6 +890,68 @@ def render_app(config):
 
         st.markdown("")
 
+        # ── Meeting Alerts ────────────────────────────────────────────────────
+        mtg["hire_date"] = pd.to_datetime(mtg["hire_date"], errors="coerce")
+        today_ts = pd.Timestamp.now()
+        mtg["days_employed"] = (today_ts - mtg["hire_date"]).dt.days
+
+        # New tutors (< 100 days) without 1-on-1 in 3 weeks (21 days)
+        new_tutors = mtg[mtg["days_employed"] < 100].copy()
+        new_overdue = new_tutors[
+            (new_tutors["days_since_last_1on1"] > 21) | (new_tutors["days_since_last_1on1"].isna())
+        ].sort_values("tutor")
+
+        # Veteran tutors (>= 100 days) without 1-on-1 in 8 weeks (56 days)
+        vet_tutors = mtg[mtg["days_employed"] >= 100].copy()
+        vet_overdue = vet_tutors[
+            (vet_tutors["days_since_last_1on1"] > 56) | (vet_tutors["days_since_last_1on1"].isna())
+        ].sort_values("tutor")
+
+        new_html = ""
+        if len(new_overdue) > 0:
+            items = ""
+            for _, row in new_overdue.iterrows():
+                days_since = f"{int(row['days_since_last_1on1'])} days" if pd.notna(row["days_since_last_1on1"]) else "never"
+                next_mtg_str = row["next_1on1"].strftime("%Y-%m-%d") if pd.notna(row.get("next_1on1")) else "none scheduled"
+                items += (
+                    f"<p style='color:#991b1b; margin:2px 0; font-size:0.82rem;'>"
+                    f"• <b>{row['tutor']}</b> — FL: {row['faculty_leader']}<br>"
+                    f"&nbsp;&nbsp;Last 1:1: {days_since} ago | Next: {next_mtg_str}<br>"
+                    f"&nbsp;&nbsp;Hired: {row['hire_date'].strftime('%Y-%m-%d')} ({int(row['days_employed'])} days)</p>"
+                )
+            new_html = (
+                "<div style='background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px 16px; height:100%;'>"
+                "<p style='color:#991b1b; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
+                "🔴 NEW TUTORS — No 1:1 in 3+ weeks</p>"
+                f"{items}</div>"
+            )
+
+        vet_html = ""
+        if len(vet_overdue) > 0:
+            items = ""
+            for _, row in vet_overdue.iterrows():
+                days_since = f"{int(row['days_since_last_1on1'])} days" if pd.notna(row["days_since_last_1on1"]) else "never"
+                next_mtg_str = row["next_1on1"].strftime("%Y-%m-%d") if pd.notna(row.get("next_1on1")) else "none scheduled"
+                items += (
+                    f"<p style='color:#92400e; margin:2px 0; font-size:0.82rem;'>"
+                    f"• <b>{row['tutor']}</b> — FL: {row['faculty_leader']}<br>"
+                    f"&nbsp;&nbsp;Last 1:1: {days_since} ago | Next: {next_mtg_str}</p>"
+                )
+            vet_html = (
+                "<div style='background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:14px 16px; height:100%;'>"
+                "<p style='color:#92400e; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
+                "🟡 VETERAN TUTORS — No 1:1 in 8+ weeks</p>"
+                f"{items}</div>"
+            )
+
+        active_alerts = [h for h in [new_html, vet_html] if h]
+        if active_alerts:
+            cols = st.columns(len(active_alerts))
+            for i, html in enumerate(active_alerts):
+                with cols[i]:
+                    st.markdown(html, unsafe_allow_html=True)
+            st.markdown("")
+
         fl_mtg_summary = (
             mtg.groupby("faculty_leader")
             .agg(
@@ -962,16 +1037,17 @@ def render_app(config):
         mtg_display = (
             mtg[["faculty_leader", "tutor", "tutor_type", "attended_1on1_meetings",
                  "1on1_meeting_hours", "last_attended_1on1", "days_since_last_1on1",
-                 "attended_group_meetings"]]
+                 "attended_group_meetings", "next_1on1"]]
             .rename(columns={
                 "faculty_leader": "Faculty Leader", "tutor": "Tutor", "tutor_type": "Type",
                 "attended_1on1_meetings": "1:1 Count", "1on1_meeting_hours": "1:1 Hours",
                 "last_attended_1on1": "Last 1:1", "days_since_last_1on1": "Days Since",
-                "attended_group_meetings": "Group Mtgs",
+                "attended_group_meetings": "Group Mtgs", "next_1on1": "Next 1:1",
             })
             .sort_values(["Faculty Leader", "Days Since"], ascending=[True, False])
         )
         mtg_display["Last 1:1"] = mtg_display["Last 1:1"].dt.strftime("%Y-%m-%d")
+        mtg_display["Next 1:1"] = pd.to_datetime(mtg_display["Next 1:1"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("—")
 
         mtg_search = st.text_input("🔍 Search tutor", placeholder="Type to filter...", key="mtg_search")
         if mtg_search:

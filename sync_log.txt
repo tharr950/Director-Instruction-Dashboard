@@ -1,0 +1,19 @@
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:240: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g    = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+[2026-05-17 06:00:02] Connecting to MySQL for Score Guarantee...
+[2026-05-17 06:00:08] Fetched 35 rows.
+[2026-05-17 06:00:08] Pushing to GitHub (tharr950/fl-dashboards-data/data/score_guarantee.csv)...
+[2026-05-17 06:00:10] Updated existing file.
+[2026-05-17 06:00:10] Fetching sessions...
+[2026-05-17 06:00:12] Fetched 99 sessions rows.
+[2026-05-17 06:00:12] Pushing sessions to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_sessions.csv)...
+[2026-05-17 06:00:14] Updated sessions.
+[2026-05-17 06:00:14] Fetching exams...
+[2026-05-17 06:00:22] Fetched 97 exams rows.
+[2026-05-17 06:00:22] Pushing exams to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_exams.csv)...
+[2026-05-17 06:00:24] Updated exams.
+[2026-05-17 06:00:24] ✅ Done — all 3 datasets synced.
