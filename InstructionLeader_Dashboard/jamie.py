@@ -842,6 +842,12 @@ def render_app(config):
                     return "🟡"
                 return ""
             curr_display.insert(0, "Flag", curr_display["Tutor"].apply(get_restr_flag))
+            if show_flagged_curr == "🔴 3+ / Year":
+                curr_display = curr_display[curr_display["Flag"] == "🔴"]
+            elif show_flagged_curr == "🟡 2+ / 6mo":
+                curr_display = curr_display[curr_display["Flag"] == "🟡"]
+            elif show_flagged_curr == "All Flagged":
+                curr_display = curr_display[curr_display["Flag"] != ""]
 
             st.markdown(
                 "<p style='font-size:0.78rem; color:#64748b; margin-bottom:8px;'>"
@@ -858,13 +864,12 @@ def render_app(config):
                 curr_tutors = sorted(curr_display["Tutor"].dropna().unique())
                 sel_curr_tutor = st.multiselect("Filter by Tutor", curr_tutors, key="curr_restr_tutor")
             with cf3:
-                show_flagged_curr = st.checkbox("Flagged only", key="curr_flagged_only")
+                show_flagged_curr = st.selectbox("Show", ["All", "All Flagged", "🔴 3+ / Year", "🟡 2+ / 6mo"], key="curr_flagged_only")
             if sel_curr_team:
                 curr_display = curr_display[curr_display["Team"].isin(sel_curr_team)]
             if sel_curr_tutor:
                 curr_display = curr_display[curr_display["Tutor"].isin(sel_curr_tutor)]
-            if show_flagged_curr:
-                curr_display = curr_display[curr_display["Flag"] != ""]
+
 
             st.dataframe(curr_display, hide_index=True, use_container_width=True)
 
@@ -933,6 +938,12 @@ def render_app(config):
 
             # Add flag
             hist_display.insert(0, "Flag", hist_display["Tutor"].apply(get_restr_flag))
+            if show_flagged_hist == "🔴 3+ / Year":
+                hist_display = hist_display[hist_display["Flag"] == "🔴"]
+            elif show_flagged_hist == "🟡 2+ / 6mo":
+                hist_display = hist_display[hist_display["Flag"] == "🟡"]
+            elif show_flagged_hist == "All Flagged":
+                hist_display = hist_display[hist_display["Flag"] != ""]
 
             st.markdown(
                 "<p style='font-size:0.78rem; color:#64748b; margin-bottom:8px;'>"
@@ -949,13 +960,12 @@ def render_app(config):
                 hist_tutors = sorted(hist_display["Tutor"].dropna().unique())
                 sel_hist_tutor = st.multiselect("Filter by Tutor", hist_tutors, key="hist_restr_tutor")
             with hf3:
-                show_flagged_hist = st.checkbox("Flagged only", key="hist_flagged_only")
+                show_flagged_hist = st.selectbox("Show", ["All", "All Flagged", "🔴 3+ / Year", "🟡 2+ / 6mo"], key="hist_flagged_only")
             if sel_hist_team:
                 hist_display = hist_display[hist_display["Team"].isin(sel_hist_team)]
             if sel_hist_tutor:
                 hist_display = hist_display[hist_display["Tutor"].isin(sel_hist_tutor)]
-            if show_flagged_hist:
-                hist_display = hist_display[hist_display["Flag"] != ""]
+
 
             st.dataframe(hist_display, hide_index=True, use_container_width=True,
                          height=min(600, len(hist_display) * 35 + 60))
@@ -1178,7 +1188,7 @@ def render_app(config):
         with mf2:
             sel_mtg_tutor = st.multiselect("Filter by Tutor", mtg_tutor_options, key="mtg_tutor_filter")
         with mf3:
-            show_flagged_mtg = st.checkbox("Flagged only", key="mtg_flagged_only")
+            show_flagged_mtg = st.selectbox("Show", ["All", "All Flagged", "🔴 New Tutors", "🟡 Veterans"], key="mtg_flagged_only")
 
         mtg_display = (
             mtg[["faculty_leader", "tutor", "tutor_type", "attended_1on1_meetings",
@@ -1198,8 +1208,7 @@ def render_app(config):
             mtg_display = mtg_display[mtg_display["Faculty Leader"].isin(sel_mtg_fl)]
         if sel_mtg_tutor:
             mtg_display = mtg_display[mtg_display["Tutor"].isin(sel_mtg_tutor)]
-        if show_flagged_mtg:
-            mtg_display = mtg_display[mtg_display["Flag"] != ""]
+
 
         # Add flag column
         def get_flag(tutor_name):
@@ -1209,6 +1218,12 @@ def render_app(config):
                 return "🟡"
             return ""
         mtg_display.insert(0, "Flag", mtg_display["Tutor"].apply(get_flag))
+        if show_flagged_mtg == "🔴 New Tutors":
+            mtg_display = mtg_display[mtg_display["Flag"] == "🔴"]
+        elif show_flagged_mtg == "🟡 Veterans":
+            mtg_display = mtg_display[mtg_display["Flag"] == "🟡"]
+        elif show_flagged_mtg == "All Flagged":
+            mtg_display = mtg_display[mtg_display["Flag"] != ""]
 
 
 
@@ -1232,10 +1247,14 @@ def render_app(config):
             unsafe_allow_html=True,
         )
 
-        if not df_kpi.empty and "fetched_at" not in df_kpi.columns:
+        if not df_kpi.empty:
+            # Check for hire dates to determine data range
+            kpi_dates = pd.to_datetime(df_kpi["Hire Date"], errors="coerce")
+            kpi_note = "Source: Dashboard_Metrics.xlsx"
+            if "fetched_at" in df_kpi.columns:
+                kpi_note += f" — Last updated: {df_kpi['fetched_at'].iloc[0]}"
             st.markdown(
-                "<p style='color:#64748b; font-size:0.82rem; margin-top:-12px;'>"
-                "Source: Dashboard_Metrics.xlsx</p>",
+                f"<p style='color:#64748b; font-size:0.82rem; margin-top:-12px;'>{kpi_note}</p>",
                 unsafe_allow_html=True,
             )
 
@@ -1372,12 +1391,7 @@ def render_app(config):
                         f"&nbsp;&nbsp;Advisor: {advisor}<br>"
                         f"&nbsp;&nbsp;Tutoring since: {first_sess}</p>"
                     )
-                no_baseline_html = (
-                    "<div style='background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px 16px; height:100%;'>"
-                    "<p style='color:#991b1b; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
-                    "⚠️ NO BASELINE SCORE</p>"
-                    f"{items}</div>"
-                )
+                no_baseline_html = items
 
             # Alert 2: Behind on exams
             behind_on_exams = []
@@ -1423,12 +1437,7 @@ def render_app(config):
                         f"&nbsp;&nbsp;{b['exams_taken']}/{b['exams_expected']} exams "
                         f"({b['completed']:.0f}/{b['pkg_hrs']:.0f} hrs)</p>"
                     )
-                behind_html = (
-                    "<div style='background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:14px 16px; height:100%;'>"
-                    "<p style='color:#92400e; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
-                    "⚠️ BEHIND ON PRACTICE TESTS</p>"
-                    f"{items}</div>"
-                )
+                behind_html = items
 
             # Alert 3: No score improvement
             score_concerns = []
@@ -1479,12 +1488,7 @@ def render_app(config):
                         f"&nbsp;&nbsp;Baseline: {sc['baseline']:.0f} → Latest: {sc['most_recent']:.0f} "
                         f"({sc['recent_change']:+.0f}) | {sc['num_exams']} exams {sc['trend']}</p>"
                     )
-                score_html = (
-                    "<div style='background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px 16px; height:100%;'>"
-                    "<p style='color:#991b1b; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
-                    "⚠️ NO SCORE IMPROVEMENT</p>"
-                    f"{items}</div>"
-                )
+                score_html = items
 
             # Render alerts horizontally
             alert_configs = [
