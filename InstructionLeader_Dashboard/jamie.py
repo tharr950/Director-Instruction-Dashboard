@@ -661,28 +661,43 @@ def render_app(config):
     # PAGE — RESTRICTED STATUS
     # ══════════════════════════════════════════════════════════════════════════
     elif page == "🚫 Restricted Status":
+
+        restr_range_options = {
+            "Past 2 Years": 24,
+            "Past Year": 12,
+            "Past 6 Months": 6,
+            "Past 3 Months": 3,
+            "Past Month": 1,
+        }
+        sel_restr_range = st.selectbox("Date Range", list(restr_range_options.keys()), index=1, key="restr_range")
+        sel_restr_months = restr_range_options[sel_restr_range]
+
+        restr_range_start = (date.today() - relativedelta(months=sel_restr_months)).strftime("%B %d, %Y")
+        restr_range_end = date.today().strftime("%B %d, %Y")
+
         st.markdown(
-            "<p class='section-label'>Restricted Tutors</p>"
-            "<p class='section-title'>Current & Historical Restricted Status</p>",
+            f"<p class='section-label'>Restricted Tutors</p>"
+            f"<p class='section-title'>Current & Historical Restricted Status</p>"
+            f"<p style='color:#64748b; font-size:0.82rem; margin-top:-12px;'>Showing data from {restr_range_start} to {restr_range_end}</p>",
             unsafe_allow_html=True,
         )
 
-        # ── Repeat Restriction Alerts ─────────────────────────────────────────
+        # ── Repeat Restriction Alerts (always full data) ─────────────────────
         if not df_restricted.empty:
-            today = pd.Timestamp.now()
-            one_year_ago = today - pd.DateOffset(years=1)
-            six_months_ago = today - pd.DateOffset(months=6)
+            today_r = pd.Timestamp.now()
+            one_year_ago = today_r - pd.DateOffset(years=1)
+            six_months_ago = today_r - pd.DateOffset(months=6)
 
-            restr = df_restricted.copy()
-            restr["status_starts_at"] = pd.to_datetime(restr["status_starts_at"], errors="coerce")
+            restr_full = df_restricted.copy()
+            restr_full["status_starts_at"] = pd.to_datetime(restr_full["status_starts_at"], errors="coerce")
 
             # 3+ times in past year
-            past_year = restr[restr["status_starts_at"] >= one_year_ago]
+            past_year = restr_full[restr_full["status_starts_at"] >= one_year_ago]
             year_counts = past_year.groupby(["employee_name", "team"]).size().reset_index(name="count")
             flagged_year = year_counts[year_counts["count"] >= 3].sort_values("employee_name")
 
             # 2+ times in past 6 months
-            past_6mo = restr[restr["status_starts_at"] >= six_months_ago]
+            past_6mo = restr_full[restr_full["status_starts_at"] >= six_months_ago]
             mo6_counts = past_6mo.groupby(["employee_name", "team"]).size().reset_index(name="count")
             flagged_6mo = mo6_counts[mo6_counts["count"] >= 2].sort_values("employee_name")
 
@@ -691,42 +706,56 @@ def render_app(config):
                 items = ""
                 for _, row in flagged_year.iterrows():
                     items += (
-                        f"<p style='color:#991b1b; margin:2px 0; font-size:0.82rem;'>"
-                        f"• <b>{row['employee_name']}</b> — {row['team']} — "
-                        f"{int(row['count'])}x in past year</p>"
+                        f"<div style='background:white; border:1px solid #fecaca; border-radius:6px; padding:8px 12px; margin:6px 0;'>"
+                        f"<p style='color:#1e293b; font-weight:600; font-size:0.85rem; margin:0;'>{row['employee_name']}</p>"
+                        f"<table style='width:100%; font-size:0.78rem; color:#64748b; margin-top:4px;'>"
+                        f"<tr><td style='padding:1px 0;'>Team</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{row['team']}</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Restrictions</td><td style='padding:1px 0; text-align:right; color:#991b1b; font-weight:600;'>{int(row['count'])}x in past year</td></tr>"
+                        f"</table></div>"
                     )
-                year_html = (
-                    "<div style='background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px 16px; height:100%;'>"
-                    "<p style='color:#991b1b; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
-                    "🔴 3+ RESTRICTIONS IN PAST YEAR</p>"
-                    f"{items}</div>"
-                )
+                year_html = items
 
             mo6_html = ""
             if len(flagged_6mo) > 0:
                 items = ""
                 for _, row in flagged_6mo.iterrows():
                     items += (
-                        f"<p style='color:#92400e; margin:2px 0; font-size:0.82rem;'>"
-                        f"• <b>{row['employee_name']}</b> — {row['team']} — "
-                        f"{int(row['count'])}x in past 6 months</p>"
+                        f"<div style='background:white; border:1px solid #fde68a; border-radius:6px; padding:8px 12px; margin:6px 0;'>"
+                        f"<p style='color:#1e293b; font-weight:600; font-size:0.85rem; margin:0;'>{row['employee_name']}</p>"
+                        f"<table style='width:100%; font-size:0.78rem; color:#64748b; margin-top:4px;'>"
+                        f"<tr><td style='padding:1px 0;'>Team</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{row['team']}</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Restrictions</td><td style='padding:1px 0; text-align:right; color:#92400e; font-weight:600;'>{int(row['count'])}x in past 6 months</td></tr>"
+                        f"</table></div>"
                     )
-                mo6_html = (
-                    "<div style='background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:14px 16px; height:100%;'>"
-                    "<p style='color:#92400e; font-weight:600; font-size:0.8rem; margin:0 0 10px 0;'>"
-                    "🟡 2+ RESTRICTIONS IN PAST 6 MONTHS</p>"
-                    f"{items}</div>"
-                )
+                mo6_html = items
 
-            active_alerts = [h for h in [year_html, mo6_html] if h]
-            if active_alerts:
-                cols = st.columns(len(active_alerts))
-                for i, html in enumerate(active_alerts):
-                    with cols[i]:
-                        st.markdown(html, unsafe_allow_html=True)
+            # Build flag sets for table
+            flagged_year_names = set(flagged_year["employee_name"].tolist()) if len(flagged_year) > 0 else set()
+            flagged_6mo_names = set(flagged_6mo["employee_name"].tolist()) if len(flagged_6mo) > 0 else set()
+
+            if len(flagged_year) > 0 or len(flagged_6mo) > 0:
+                ac1, ac2 = st.columns(2)
+                with ac1:
+                    with st.expander(f"🔴 3+ Restrictions in Past Year ({len(flagged_year)})", expanded=False):
+                        if year_html:
+                            st.markdown(year_html, unsafe_allow_html=True)
+                        else:
+                            st.success("No tutors with 3+ restrictions in the past year.")
+                with ac2:
+                    with st.expander(f"🟡 2+ Restrictions in Past 6 Months ({len(flagged_6mo)})", expanded=False):
+                        if mo6_html:
+                            st.markdown(mo6_html, unsafe_allow_html=True)
+                        else:
+                            st.success("No tutors with 2+ restrictions in the past 6 months.")
                 st.markdown("")
+        else:
+            flagged_year_names = set()
+            flagged_6mo_names = set()
 
-        # Current restricted tutors
+        # ── Filter data by selected date range ───────────────────────────────
+        restr_cutoff = pd.Timestamp.now() - pd.DateOffset(months=sel_restr_months)
+
+        # Currently restricted tutors
         currently_restricted = df_restricted[df_restricted["current_status_flag"] == 1].copy()
 
         cr1, cr2, cr3 = st.columns(3)
@@ -790,7 +819,7 @@ def render_app(config):
                     hide_index=True, use_container_width=True, height=350,
                 )
 
-            # Individual tutor detail
+            # Individual currently restricted detail
             st.markdown("")
             curr_display = (
                 currently_restricted[["employee_name", "team", "tier", "update_type",
@@ -804,25 +833,50 @@ def render_app(config):
             )
             curr_display["Restricted Since"] = curr_display["Restricted Since"].dt.strftime("%Y-%m-%d")
             curr_display["Days Restricted"] = curr_display["Days Restricted"].astype(int)
+
+            # Add flag column
+            def get_restr_flag(name):
+                if name in flagged_year_names:
+                    return "🔴"
+                elif name in flagged_6mo_names:
+                    return "🟡"
+                return ""
+            curr_display.insert(0, "Flag", curr_display["Tutor"].apply(get_restr_flag))
+
+            st.markdown(
+                "<p style='font-size:0.78rem; color:#64748b; margin-bottom:8px;'>"
+                "🔴 3+ restrictions in past year &nbsp;&nbsp;|&nbsp;&nbsp; "
+                "🟡 2+ restrictions in past 6 months</p>",
+                unsafe_allow_html=True,
+            )
             st.dataframe(curr_display, hide_index=True, use_container_width=True)
 
         else:
             st.success("No tutors are currently on restricted status.")
 
-        # Historical restricted status
+        # Historical restricted status (filtered by date range)
         st.markdown("")
         st.markdown(
             "<p class='section-label'>History</p>"
-            "<p class='section-title'>Restricted Status History (Since Jan 2025)</p>",
+            "<p class='section-title'>Restricted Status History</p>",
             unsafe_allow_html=True,
         )
 
-        hist_restricted = df_restricted[df_restricted["current_status_flag"] == 0].copy()
+        hist_all = df_restricted.copy()
+        hist_all["status_starts_at"] = pd.to_datetime(hist_all["status_starts_at"], errors="coerce")
+        hist_all["status_ends_at"] = pd.to_datetime(hist_all["status_ends_at"], errors="coerce")
 
-        if len(hist_restricted) > 0:
-            # Count of restriction events by team
+        # Filter by date range — include events that started OR ended in range
+        hist_filtered = hist_all[
+            (hist_all["status_starts_at"] >= restr_cutoff)
+            | (hist_all["status_ends_at"] >= restr_cutoff)
+            | (hist_all["current_status_flag"] == 1)
+        ]
+
+        if len(hist_filtered) > 0:
+            # Count by team
             hist_by_team = (
-                hist_restricted.groupby("team")
+                hist_filtered.groupby("team")
                 .agg(
                     events=("employee_id", "count"),
                     unique_tutors=("employee_id", "nunique"),
@@ -844,7 +898,7 @@ def render_app(config):
 
             st.markdown("")
             hist_display = (
-                df_restricted[["employee_name", "team", "tier", "update_type",
+                hist_filtered[["employee_name", "team", "tier", "update_type",
                                 "status_starts_at", "status_ends_at", "days_in_effect",
                                 "current_status_flag"]]
                 .rename(columns={
@@ -860,19 +914,25 @@ def render_app(config):
             hist_display["Days"] = hist_display["Days"].fillna(0).astype(int)
             hist_display["Current"] = hist_display["Current"].map({1: "Yes", 0: "No"})
 
-            hist_search = st.text_input("🔍 Search tutor", placeholder="Type to filter...", key="restr_search")
-            if hist_search:
-                hist_display = hist_display[hist_display["Tutor"].str.contains(hist_search, case=False, na=False)]
+            # Add flag
+            hist_display.insert(0, "Flag", hist_display["Tutor"].apply(get_restr_flag))
+
+            st.markdown(
+                "<p style='font-size:0.78rem; color:#64748b; margin-bottom:8px;'>"
+                "🔴 3+ restrictions in past year &nbsp;&nbsp;|&nbsp;&nbsp; "
+                "🟡 2+ restrictions in past 6 months</p>",
+                unsafe_allow_html=True,
+            )
+
+            restr_search = st.text_input("🔍 Search tutor", placeholder="Type to filter...", key="restr_search")
+            if restr_search:
+                hist_display = hist_display[hist_display["Tutor"].str.contains(restr_search, case=False, na=False)]
 
             st.dataframe(hist_display, hide_index=True, use_container_width=True,
                          height=min(600, len(hist_display) * 35 + 60))
         else:
-            st.info("No historical restriction events found since Jan 2025.")
+            st.info("No restriction events found in the selected date range.")
 
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # PAGE — MEETINGS
-    # ══════════════════════════════════════════════════════════════════════════
     elif page == "📅 Meetings":
 
         mtg_range_options = {
