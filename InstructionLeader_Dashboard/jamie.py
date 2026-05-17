@@ -1388,10 +1388,12 @@ def render_app(config):
                     advisor = row.get("advisor", "Unknown")
                     first_sess = row["first_test_prep_session"].strftime("%Y-%m-%d") if pd.notna(row.get("first_test_prep_session")) else "—"
                     items += (
-                        f"<p style='color:#991b1b; margin:2px 0; font-size:0.82rem;'>"
-                        f"• <b>{student}</b><br>"
-                        f"&nbsp;&nbsp;Advisor: {advisor}<br>"
-                        f"&nbsp;&nbsp;Tutoring since: {first_sess}</p>"
+                        f"<div style='background:white; border:1px solid #fecaca; border-radius:6px; padding:8px 12px; margin:6px 0;'>"
+                        f"<p style='color:#1e293b; font-weight:600; font-size:0.85rem; margin:0;'>{student}</p>"
+                        f"<table style='width:100%; font-size:0.78rem; color:#64748b; margin-top:4px;'>"
+                        f"<tr><td style='padding:1px 0;'>Advisor</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{advisor}</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Tutoring Since</td><td style='padding:1px 0; text-align:right; color:#991b1b; font-weight:600;'>{first_sess}</td></tr>"
+                        f"</table></div>"
                     )
                 no_baseline_html = items
 
