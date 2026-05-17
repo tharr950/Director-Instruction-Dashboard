@@ -963,7 +963,12 @@ def render_app(config):
                 hist_display = hist_display[hist_display["Team"].isin(sel_hist_team)]
             if sel_hist_tutor:
                 hist_display = hist_display[hist_display["Tutor"].isin(sel_hist_tutor)]
-
+            if show_flagged_hist == "🔴 3+ / Year":
+                hist_display = hist_display[hist_display["Flag"] == "🔴"]
+            elif show_flagged_hist == "🟡 2+ / 6mo":
+                hist_display = hist_display[hist_display["Flag"] == "🟡"]
+            elif show_flagged_hist == "All Flagged":
+                hist_display = hist_display[hist_display["Flag"] != ""]
 
             st.dataframe(hist_display, hide_index=True, use_container_width=True,
                          height=min(600, len(hist_display) * 35 + 60))
