@@ -1871,9 +1871,14 @@ def render_app(config):
             # Color tag filter
             active_tags = [c for c in filtered_comp["color"].unique() if c and str(c).strip()]
             if active_tags:
-                tag_filter = st.multiselect("Filter by Tag", sorted(active_tags), key="sg_filter_tag")
-                if tag_filter:
-                    filtered_comp = filtered_comp[filtered_comp["color"].isin(tag_filter)]
+                legend = st.session_state.sg_legend
+                tag_display = {t: f"{t} {legend[t]}" if legend.get(t) else t for t in sorted(active_tags)}
+                tag_options = list(tag_display.values())
+                tag_reverse = {v: k for k, v in tag_display.items()}
+                tag_selection = st.multiselect("Filter by Tag", tag_options, key="sg_filter_tag")
+                if tag_selection:
+                    selected_raw_tags = [tag_reverse[s] for s in tag_selection]
+                    filtered_comp = filtered_comp[filtered_comp["color"].isin(selected_raw_tags)]
 
             filtered_comp = filtered_comp.reset_index(drop=True)
 
@@ -1991,14 +1996,15 @@ def render_app(config):
 
             # Editable tag and notes in expander
             with st.expander("✏️ Edit Tags & Notes", expanded=False):
-                disabled_cols = [c for c in matrix.columns if c not in ["Notes", "Tag"]]
+                edit_df = matrix[["Student", "Tag", "Notes"]].copy()
                 edited_matrix = st.data_editor(
-                    matrix,
+                    edit_df,
                     hide_index=True,
                     use_container_width=True,
-                    height=min(500, len(matrix) * 40 + 60),
-                    disabled=disabled_cols,
+                    height=min(500, len(edit_df) * 40 + 60),
+                    disabled=["Student"],
                     column_config={
+                        "Student": st.column_config.TextColumn("Student", width=180),
                         "Tag": st.column_config.SelectboxColumn(
                             "Tag",
                             options=["", "🔴", "🟠", "🟡", "🟢", "🔵", "🟣"],
@@ -2055,6 +2061,7 @@ def render_app(config):
                     new_color = str(edited_matrix.iloc[i].get("Tag", "") or "")
                     old_note = str(filtered_comp.iloc[i].get("note", "") or "")
                     old_color = str(filtered_comp.iloc[i].get("color", "") or "")
+
                     if new_note != old_note or new_color != old_color:
                         sid = student_ids_ordered[i]
                         now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
