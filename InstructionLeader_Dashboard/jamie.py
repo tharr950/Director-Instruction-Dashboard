@@ -1845,6 +1845,16 @@ def render_app(config):
                 "To Target": st.column_config.TextColumn("To Target", width=130),
                 "Notes": st.column_config.TextColumn("Notes", width="large"),
             }
+            st.markdown("""
+            <style>
+            [data-testid="stDataEditor"] [data-testid="data-grid"] [role="row"]:nth-child(even) {
+                background-color: #f1f5f9;
+            }
+            [data-testid="stDataEditor"] [data-testid="data-grid"] [role="row"]:nth-child(odd) {
+                background-color: #ffffff;
+            }
+            </style>
+            """, unsafe_allow_html=True)
             edited_matrix = st.data_editor(
                 matrix,
                 hide_index=True,
