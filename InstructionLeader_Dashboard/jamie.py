@@ -1772,6 +1772,7 @@ def render_app(config):
             notes_merged = st.session_state.sg_notes.copy() if not st.session_state.sg_notes.empty else pd.DataFrame(columns=["student_id", "note"])
             filtered_comp = filtered_comp.merge(notes_merged[["student_id", "note"]], on="student_id", how="left")
             filtered_comp["note"] = filtered_comp["note"].fillna("")
+            filtered_comp = filtered_comp.reset_index(drop=True)
 
             matrix = filtered_comp[["student", "tutor", "advisor"]].copy()
             matrix["Pkg ≥20hr"] = filtered_comp.apply(
@@ -1835,21 +1836,22 @@ def render_app(config):
                 key="sg_matrix_editor",
             )
 
-            # Detect and save note changes
-            if edited_matrix is not None:
+            # Detect and save note changes — build a student_id list aligned with matrix rows
+            student_ids_ordered = filtered_comp["student_id"].tolist()
+            if edited_matrix is not None and len(edited_matrix) == len(student_ids_ordered):
                 changed = False
                 notes_df = st.session_state.sg_notes.copy()
-                for idx, row in edited_matrix.iterrows():
-                    new_note = row.get("Notes", "")
-                    old_note = matrix.iloc[idx]["Notes"] if idx < len(matrix) else ""
-                    if str(new_note) != str(old_note):
-                        sid = filtered_comp.iloc[idx]["student_id"]
+                for i in range(len(edited_matrix)):
+                    new_note = str(edited_matrix.iloc[i].get("Notes", "") or "")
+                    old_note = str(filtered_comp.iloc[i].get("note", "") or "")
+                    if new_note != old_note:
+                        sid = student_ids_ordered[i]
                         now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
                         if sid in notes_df["student_id"].values:
                             notes_df.loc[notes_df["student_id"] == sid, "note"] = new_note
                             notes_df.loc[notes_df["student_id"] == sid, "updated_at"] = now_str
                         else:
-                            new_row = pd.DataFrame([{"student_id": sid, "note": new_note, "updated_at": now_str}])
+                            new_row = pd.DataFrame([{"student_id": int(sid), "note": new_note, "updated_at": now_str}])
                             notes_df = pd.concat([notes_df, new_row], ignore_index=True)
                         changed = True
                 if changed:
