@@ -1580,10 +1580,20 @@ def render_app(config):
                     checks["3_pace_val"] = None
 
                 # 4. Baseline score before first session
-                checks["4_baseline"] = (
-                    pd.notna(row["starting_test_taken"]) and pd.notna(row["first_test_prep_session"])
-                    and row["starting_test_taken"] <= row["first_test_prep_session"]
-                )
+                has_baseline = pd.notna(row["starting_test_taken"]) and pd.notna(row["starting_score"])
+                has_started = pd.notna(row["first_test_prep_session"])
+                if has_baseline and not has_started:
+                    # Has baseline, hasn't started tutoring yet — requirement met
+                    checks["4_baseline"] = True
+                elif has_baseline and has_started:
+                    # Has baseline and started — check if baseline was before first session
+                    checks["4_baseline"] = row["starting_test_taken"] <= row["first_test_prep_session"]
+                elif not has_baseline and has_started:
+                    # Started tutoring without a baseline — fail
+                    checks["4_baseline"] = False
+                else:
+                    # No baseline, no tutoring — not applicable
+                    checks["4_baseline"] = None
 
                 # 5. No missed sessions
                 if not df_sg_sessions.empty and sid in df_sg_sessions["student_id"].values:
