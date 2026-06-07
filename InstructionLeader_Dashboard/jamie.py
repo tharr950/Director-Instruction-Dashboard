@@ -1929,8 +1929,8 @@ def render_app(config):
 
             # Editable notes in table
             disabled_cols = [c for c in matrix.columns if c not in ["Notes", "Tag"]]
-            # Reorder so Notes is last
-            col_order = ["Student", "Tutor", "Advisor"] + [c for c in matrix.columns if c not in ["Student", "Tutor", "Advisor", "Notes"]] + ["Notes"]
+            # Reorder: Tag first, Notes last
+            col_order = ["Tag"] + [c for c in matrix.columns if c not in ["Tag", "Notes"]] + ["Notes"]
             matrix = matrix[col_order]
 
             col_config = {
@@ -1956,25 +1956,58 @@ def render_app(config):
                     ),
                     "Notes": st.column_config.TextColumn("Notes", width="large"),
             }
-            st.markdown("""
-            <style>
-            [data-testid="stDataEditor"] [data-testid="data-grid"] [role="row"]:nth-child(even) {
-                background-color: #f1f5f9;
+            # Color map for row shading
+            color_bg_map = {
+                "🔴": "rgba(239,68,68,0.12)",
+                "🟠": "rgba(249,115,22,0.12)",
+                "🟡": "rgba(234,179,8,0.12)",
+                "🟢": "rgba(34,197,94,0.12)",
+                "🔵": "rgba(59,130,246,0.12)",
+                "🟣": "rgba(168,85,247,0.12)",
             }
-            [data-testid="stDataEditor"] [data-testid="data-grid"] [role="row"]:nth-child(odd) {
-                background-color: #ffffff;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-            edited_matrix = st.data_editor(
-                matrix,
+
+            def shade_rows(row):
+                tag = row.get("Tag", "")
+                bg = color_bg_map.get(str(tag).strip(), "")
+                if bg:
+                    return [f"background-color: {bg}"] * len(row)
+                return [""] * len(row)
+
+            styled = matrix.style.apply(shade_rows, axis=1)
+            st.dataframe(
+                styled,
                 hide_index=True,
                 use_container_width=True,
-                height=min(700, len(matrix) * 45 + 60),
-                disabled=disabled_cols,
-                column_config=col_config,
-                key="sg_matrix_editor",
+                height=min(700, len(matrix) * 38 + 60),
+                column_config={
+                    "Tag": st.column_config.TextColumn("Tag", width=50),
+                    "Student": st.column_config.TextColumn("Student", width=140),
+                    "Tutor": st.column_config.TextColumn("Tutor", width=140),
+                    "Advisor": st.column_config.TextColumn("Advisor", width=130),
+                    "Faculty Leader": st.column_config.TextColumn("Faculty Leader", width=130),
+                    "Notes": st.column_config.TextColumn("Notes", width="large"),
+                },
             )
+
+            # Editable tag and notes in expander
+            with st.expander("✏️ Edit Tags & Notes", expanded=False):
+                disabled_cols = [c for c in matrix.columns if c not in ["Notes", "Tag"]]
+                edited_matrix = st.data_editor(
+                    matrix,
+                    hide_index=True,
+                    use_container_width=True,
+                    height=min(500, len(matrix) * 40 + 60),
+                    disabled=disabled_cols,
+                    column_config={
+                        "Tag": st.column_config.SelectboxColumn(
+                            "Tag",
+                            options=["", "🔴", "🟠", "🟡", "🟢", "🔵", "🟣"],
+                            width=60,
+                        ),
+                        "Notes": st.column_config.TextColumn("Notes", width="large"),
+                    },
+                    key="sg_matrix_editor",
+                )
 
             # ── Color Legend ───────────────────────────────────────────────────
             legend = st.session_state.sg_legend
