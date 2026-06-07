@@ -1821,18 +1821,31 @@ def render_app(config):
 
             # Editable notes in table
             disabled_cols = [c for c in matrix.columns if c != "Notes"]
+            col_config = {
+                "Student": st.column_config.TextColumn("Student", width=140),
+                "Tutor": st.column_config.TextColumn("Tutor", width=140),
+                "Advisor": st.column_config.TextColumn("Advisor", width=130),
+                "Pkg ≥20hr": st.column_config.TextColumn("Pkg ≥20hr", width=90),
+                "Hrs Used": st.column_config.TextColumn("Hrs Used", width=100),
+                "Pace": st.column_config.TextColumn("Pace", width=110),
+                "Baseline": st.column_config.TextColumn("Baseline", width=85),
+                "Attend": st.column_config.TextColumn("Attend", width=90),
+                "Tests": st.column_config.TextColumn("Tests", width=75),
+                "Gaps ≥7d": st.column_config.TextColumn("Gaps ≥7d", width=90),
+                "Final ≤14d": st.column_config.TextColumn("Final ≤14d", width=70),
+                "Score": st.column_config.TextColumn("Score", width=130),
+                "Test": st.column_config.TextColumn("Test", width=50),
+                "Target": st.column_config.TextColumn("Target", width=60),
+                "To Target": st.column_config.TextColumn("To Target", width=130),
+                "Notes": st.column_config.TextColumn("Notes", width="large"),
+            }
             edited_matrix = st.data_editor(
                 matrix,
                 hide_index=True,
                 use_container_width=True,
-                height=min(700, len(matrix) * 35 + 60),
+                height=min(700, len(matrix) * 45 + 60),
                 disabled=disabled_cols,
-                column_config={
-                    "Notes": st.column_config.TextColumn(
-                        "Notes",
-                        width="large",
-                    ),
-                },
+                column_config=col_config,
                 key="sg_matrix_editor",
             )
 
