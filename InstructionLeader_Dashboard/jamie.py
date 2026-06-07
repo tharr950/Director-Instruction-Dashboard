@@ -1845,22 +1845,6 @@ def render_app(config):
                 "To Target": st.column_config.TextColumn("To Target", width=130),
                 "Notes": st.column_config.TextColumn("Notes", width="large"),
             }
-            st.markdown("""
-            <style>
-            [data-testid="stDataEditor"] td:nth-child(-n+3),
-            [data-testid="stDataEditor"] th:nth-child(-n+3) {
-                position: sticky;
-                background: white;
-                z-index: 1;
-            }
-            [data-testid="stDataEditor"] td:nth-child(1),
-            [data-testid="stDataEditor"] th:nth-child(1) { left: 0; }
-            [data-testid="stDataEditor"] td:nth-child(2),
-            [data-testid="stDataEditor"] th:nth-child(2) { left: 140px; }
-            [data-testid="stDataEditor"] td:nth-child(3),
-            [data-testid="stDataEditor"] th:nth-child(3) { left: 280px; }
-            </style>
-            """, unsafe_allow_html=True)
             edited_matrix = st.data_editor(
                 matrix,
                 hide_index=True,
