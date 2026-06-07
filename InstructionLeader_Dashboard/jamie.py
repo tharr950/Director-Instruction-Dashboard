@@ -1405,12 +1405,8 @@ def render_app(config):
                     pkg_hrs = row["package_hours"]
                     if pd.isna(pkg_hrs) or pd.isna(row.get("first_test_prep_session")):
                         continue
-                    if pkg_hrs <= 24:
-                        required_total = 4
-                        num_milestones = 4
-                    else:
-                        required_total = 4 + int((pkg_hrs - 24) / 6)
-                        num_milestones = required_total
+                    required_total = 4
+                    num_milestones = 4
                     milestone_hours = [(pkg_hrs / num_milestones) * (i + 1) for i in range(num_milestones)]
                     completed = row["completed_test_prep_hours"] if pd.notna(row.get("completed_test_prep_hours")) else 0
                     exams_expected = sum(1 for mh in milestone_hours if completed >= mh)
@@ -1602,12 +1598,8 @@ def render_app(config):
                     checks["5_attended"] = None
                     checks["5_total"] = None
 
-                # 7. Minimum practice tests (excluding baseline)
-                pkg_hrs = row["package_hours"] if pd.notna(row["package_hours"]) else 0
-                if pkg_hrs <= 24:
-                    required_tests = 4
-                else:
-                    required_tests = 4 + int((pkg_hrs - 24) / 6)
+                # 7. Minimum 4 practice tests (excluding baseline)
+                required_tests = 4
 
                 if not df_sg_exams.empty and sid in df_sg_exams["student_id"].values:
                     stu_exams = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
@@ -1842,7 +1834,7 @@ def render_app(config):
                     lines.append(check_line("100% session attendance", sc.get("5_attendance"),
                         f"— {int(sc.get('5_attended', 0))}/{int(sc.get('5_total', 0))} attended" if pd.notna(sc.get("5_attended")) else ""))
                     lines.append("⚪ **Homework completion** — not yet tracked")
-                    lines.append(check_line(f"Minimum practice tests", sc.get("7_practice_tests"),
+                    lines.append(check_line("Minimum 4 practice tests", sc.get("7_practice_tests"),
                         f"— {int(sc.get('7_taken', 0))}/{int(sc.get('7_required', 0))} taken" if pd.notna(sc.get("7_taken")) else ""))
                     lines.append(check_line("≥ 1 week between practice tests", sc.get("8_week_gaps"),
                         f"— min gap {int(sc.get('8_min_gap'))} days" if pd.notna(sc.get("8_min_gap")) else ""))
