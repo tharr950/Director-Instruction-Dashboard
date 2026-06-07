@@ -1842,14 +1842,6 @@ def render_app(config):
                 sel_fls = st.multiselect("Filter by Faculty Leader", sg_fls, key="sg_filter_fl")
 
             filtered_comp = comp_df.copy()
-
-            # Color tag filter
-            active_tags = [c for c in filtered_comp["color"].unique() if c and str(c).strip()]
-            if active_tags:
-                tag_filter = st.multiselect("Filter by Tag", sorted(active_tags), key="sg_filter_tag")
-                if tag_filter:
-                    filtered_comp = filtered_comp[filtered_comp["color"].isin(tag_filter)]
-
             if sel_students:
                 filtered_comp = filtered_comp[filtered_comp["student"].isin(sel_students)]
             if sel_tutors:
@@ -1875,6 +1867,14 @@ def render_app(config):
             filtered_comp = filtered_comp.merge(notes_merged[merge_cols], on="student_id", how="left")
             filtered_comp["note"] = filtered_comp["note"].fillna("")
             filtered_comp["color"] = filtered_comp["color"].fillna("")
+
+            # Color tag filter
+            active_tags = [c for c in filtered_comp["color"].unique() if c and str(c).strip()]
+            if active_tags:
+                tag_filter = st.multiselect("Filter by Tag", sorted(active_tags), key="sg_filter_tag")
+                if tag_filter:
+                    filtered_comp = filtered_comp[filtered_comp["color"].isin(tag_filter)]
+
             filtered_comp = filtered_comp.reset_index(drop=True)
 
             matrix = filtered_comp[["student", "tutor", "advisor", "faculty_leader"]].copy()
