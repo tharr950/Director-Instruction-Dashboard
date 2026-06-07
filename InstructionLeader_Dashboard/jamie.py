@@ -1809,7 +1809,6 @@ def render_app(config):
             matrix["Target"] = filtered_comp.apply(
                 lambda r: f"{r['target_score']:.0f}" if pd.notna(r.get("target_score")) else "—", axis=1
             )
-            matrix["Notes"] = filtered_comp["note"]
             matrix["To Target"] = filtered_comp.apply(
                 lambda r: (
                     f"✅ +{abs(r['points_to_target']):.0f} ahead" if pd.notna(r.get("on_track")) and bool(r["on_track"])
@@ -1819,8 +1818,15 @@ def render_app(config):
             )
             matrix = matrix.rename(columns={"student": "Student", "tutor": "Tutor", "advisor": "Advisor"})
 
+            # Notes column — always last
+            matrix["Notes"] = filtered_comp["note"]
+
             # Editable notes in table
             disabled_cols = [c for c in matrix.columns if c != "Notes"]
+            # Reorder so Notes is last
+            col_order = ["Student", "Tutor", "Advisor"] + [c for c in matrix.columns if c not in ["Student", "Tutor", "Advisor", "Notes"]] + ["Notes"]
+            matrix = matrix[col_order]
+
             col_config = {
                 "Student": st.column_config.TextColumn("Student", width=140),
                 "Tutor": st.column_config.TextColumn("Tutor", width=140),
@@ -1839,6 +1845,22 @@ def render_app(config):
                 "To Target": st.column_config.TextColumn("To Target", width=130),
                 "Notes": st.column_config.TextColumn("Notes", width="large"),
             }
+            st.markdown("""
+            <style>
+            [data-testid="stDataEditor"] td:nth-child(-n+3),
+            [data-testid="stDataEditor"] th:nth-child(-n+3) {
+                position: sticky;
+                background: white;
+                z-index: 1;
+            }
+            [data-testid="stDataEditor"] td:nth-child(1),
+            [data-testid="stDataEditor"] th:nth-child(1) { left: 0; }
+            [data-testid="stDataEditor"] td:nth-child(2),
+            [data-testid="stDataEditor"] th:nth-child(2) { left: 140px; }
+            [data-testid="stDataEditor"] td:nth-child(3),
+            [data-testid="stDataEditor"] th:nth-child(3) { left: 280px; }
+            </style>
+            """, unsafe_allow_html=True)
             edited_matrix = st.data_editor(
                 matrix,
                 hide_index=True,
