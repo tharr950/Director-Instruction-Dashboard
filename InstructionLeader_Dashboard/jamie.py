@@ -1996,8 +1996,18 @@ def render_app(config):
 
             # Editable tag and notes in expander
             with st.expander("✏️ Edit Tags & Notes", expanded=False):
+                legend = st.session_state.sg_legend
+                tag_emojis = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
+                labeled_options = [""] + [f"{e} {legend[e]}" if legend.get(e) else e for e in tag_emojis]
+                tag_to_labeled = {"": ""}
+                for e in tag_emojis:
+                    tag_to_labeled[e] = f"{e} {legend[e]}" if legend.get(e) else e
+                labeled_to_tag = {v: k for k, v in tag_to_labeled.items()}
+
                 edit_df = matrix[["Student", "Tag", "Notes"]].copy()
-                edited_matrix = st.data_editor(
+                edit_df["Tag"] = edit_df["Tag"].apply(lambda x: tag_to_labeled.get(str(x).strip(), x) if x else "")
+
+                edited_matrix_raw = st.data_editor(
                     edit_df,
                     hide_index=True,
                     use_container_width=True,
@@ -2007,12 +2017,18 @@ def render_app(config):
                         "Student": st.column_config.TextColumn("Student", width=180),
                         "Tag": st.column_config.SelectboxColumn(
                             "Tag",
-                            options=["", "🔴", "🟠", "🟡", "🟢", "🔵", "🟣"],
-                            width=60,
+                            options=labeled_options,
+                            width=150,
                         ),
                         "Notes": st.column_config.TextColumn("Notes", width="large"),
                     },
                     key="sg_matrix_editor",
+                )
+
+                # Convert labeled tags back to emoji-only for storage
+                edited_matrix = edited_matrix_raw.copy()
+                edited_matrix["Tag"] = edited_matrix["Tag"].apply(
+                    lambda x: labeled_to_tag.get(str(x).strip(), x.split(" ")[0] if x else "") if x else ""
                 )
 
             # ── Color Legend ───────────────────────────────────────────────────
@@ -2058,7 +2074,8 @@ def render_app(config):
                     notes_df["color"] = ""
                 for i in range(len(edited_matrix)):
                     new_note = str(edited_matrix.iloc[i].get("Notes", "") or "")
-                    new_color = str(edited_matrix.iloc[i].get("Tag", "") or "")
+                    new_color_raw = str(edited_matrix.iloc[i].get("Tag", "") or "")
+                    new_color = new_color_raw.split(" ")[0].strip() if new_color_raw else ""
                     old_note = str(filtered_comp.iloc[i].get("note", "") or "")
                     old_color = str(filtered_comp.iloc[i].get("color", "") or "")
 
