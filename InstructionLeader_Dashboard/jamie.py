@@ -2014,6 +2014,40 @@ def render_app(config):
                 },
             )
 
+            # Download options
+            dl1, dl2 = st.columns(2)
+            with dl1:
+                csv_data = matrix.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "📥 Download as CSV",
+                    data=csv_data,
+                    file_name=f"score_guarantee_checklist_{date.today().isoformat()}.csv",
+                    mime="text/csv",
+                    key="sg_csv_download",
+                )
+            with dl2:
+                # Build a clean Excel export
+                import io as _io
+                excel_buffer = _io.BytesIO()
+                with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+                    matrix.to_excel(writer, index=False, sheet_name="Checklist")
+                    # Auto-size columns
+                    ws = writer.sheets["Checklist"]
+                    for col_idx, col_name in enumerate(matrix.columns, 1):
+                        max_len = max(
+                            len(str(col_name)),
+                            matrix[col_name].astype(str).str.len().max() if len(matrix) > 0 else 0
+                        )
+                        ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = min(max_len + 3, 40)
+                excel_buffer.seek(0)
+                st.download_button(
+                    "📥 Download as Excel",
+                    data=excel_buffer,
+                    file_name=f"score_guarantee_checklist_{date.today().isoformat()}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="sg_xlsx_download",
+                )
+
             # Editable tag and notes in expander
             with st.expander("✏️ Edit Tags & Notes", expanded=False):
                 legend = st.session_state.sg_legend
