@@ -1413,6 +1413,7 @@ def render_app(config):
                     student = row.get("student", "Unknown")
                     advisor = row.get("advisor", "Unknown")
                     tutor = row.get("tutor", "Unknown") or "Not assigned"
+                    fl = row.get("faculty_leader", "—") or "—"
                     won = row["won_at"].strftime("%b %d, %Y") if pd.notna(row.get("won_at")) else "—"
                     pkg = f"{row['package_hours']:.0f} hrs" if pd.notna(row.get("package_hours")) else "—"
                     items += (
@@ -1421,6 +1422,7 @@ def render_app(config):
                         f"<table style='width:100%; font-size:0.78rem; color:#64748b; margin-top:4px;'>"
                         f"<tr><td style='padding:1px 0;'>Advisor</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{advisor}</td></tr>"
                         f"<tr><td style='padding:1px 0;'>Tutor</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{tutor}</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Faculty Leader</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{fl}</td></tr>"
                         f"<tr><td style='padding:1px 0;'>Package</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{pkg}</td></tr>"
                         f"<tr><td style='padding:1px 0;'>Won Date</td><td style='padding:1px 0; text-align:right; color:#0369a1; font-weight:600;'>{won}</td></tr>"
                         f"</table></div>"
@@ -1599,6 +1601,17 @@ def render_app(config):
                     sg[col] = pd.to_numeric(sg[col], errors="coerce")
             sg["score_change"] = sg["latest_test_score"] - sg["starting_score"]
 
+            # Add Faculty Leader from team roster based on tutor name
+            tutor_to_fl = df[["tutor", "manager"]].drop_duplicates().rename(
+                columns={"tutor": "_tutor_match", "manager": "faculty_leader"}
+            )
+            # Match on first tutor if multiple
+            sg["_tutor_match"] = sg["tutor"].apply(
+                lambda x: x.split(",")[0].strip() if pd.notna(x) else None
+            )
+            sg = sg.merge(tutor_to_fl, on="_tutor_match", how="left")
+            sg.drop(columns=["_tutor_match"], inplace=True)
+
             # Score improvement targets (SAT: 400-1600 range, ACT: 1-36 range)
             def calc_target(score):
                 if pd.isna(score):
@@ -1736,6 +1749,7 @@ def render_app(config):
                 checks["student"] = row.get("student", "")
                 checks["tutor"] = row.get("tutor", "")
                 checks["advisor"] = row.get("advisor", "")
+                checks["faculty_leader"] = row.get("faculty_leader", "")
                 checks["package_hours"] = row.get("package_hours")
                 checks["completed_hours"] = row.get("completed_test_prep_hours")
                 checks["starting_score"] = row.get("starting_score")
@@ -1774,7 +1788,7 @@ def render_app(config):
             )
 
             # Filters
-            fc1, fc2, fc3 = st.columns(3)
+            fc1, fc2, fc3, fc4 = st.columns(4)
             with fc1:
                 sg_students = sorted(comp_df["student"].dropna().unique())
                 sel_students = st.multiselect("Filter by Student", sg_students, key="sg_filter_student")
@@ -1784,6 +1798,9 @@ def render_app(config):
             with fc3:
                 sg_advisors = sorted(comp_df["advisor"].dropna().unique())
                 sel_advisors = st.multiselect("Filter by Advisor", sg_advisors, key="sg_filter_advisor")
+            with fc4:
+                sg_fls = sorted(comp_df["faculty_leader"].dropna().unique())
+                sel_fls = st.multiselect("Filter by Faculty Leader", sg_fls, key="sg_filter_fl")
 
             filtered_comp = comp_df.copy()
             if sel_students:
@@ -1792,6 +1809,8 @@ def render_app(config):
                 filtered_comp = filtered_comp[filtered_comp["tutor"].isin(sel_tutors)]
             if sel_advisors:
                 filtered_comp = filtered_comp[filtered_comp["advisor"].isin(sel_advisors)]
+            if sel_fls:
+                filtered_comp = filtered_comp[filtered_comp["faculty_leader"].isin(sel_fls)]
             filtered_comp = filtered_comp.sort_values("student")
 
             def status_icon(val):
@@ -1807,7 +1826,8 @@ def render_app(config):
             filtered_comp["note"] = filtered_comp["note"].fillna("")
             filtered_comp = filtered_comp.reset_index(drop=True)
 
-            matrix = filtered_comp[["student", "tutor", "advisor"]].copy()
+            matrix = filtered_comp[["student", "tutor", "advisor", "faculty_leader"]].copy()
+            matrix = matrix.rename(columns={"faculty_leader": "Faculty Leader"})
             matrix["Pkg ≥20hr"] = filtered_comp.apply(
                 lambda r: f"{status_icon(r['1_pkg_20hrs'])} {r['package_hours']:.0f}hr" if pd.notna(r.get("package_hours")) else "—", axis=1
             )
@@ -1942,6 +1962,7 @@ def render_app(config):
                 p1, p2, p3, p4 = st.columns(4)
                 p1.metric("Tutor", stu_row.get("tutor", "—") or "—")
                 p2.metric("Advisor", stu_row.get("advisor", "—") or "—")
+                st.markdown(f"**Faculty Leader:** {stu_row.get('faculty_leader', '—') or '—'}")
                 p3.metric("Package Hours", f"{stu_row['package_hours']:.0f}" if pd.notna(stu_row.get("package_hours")) else "—")
                 p4.metric("Won Date", stu_row["won_at"].strftime("%Y-%m-%d") if pd.notna(stu_row.get("won_at")) else "—")
 
