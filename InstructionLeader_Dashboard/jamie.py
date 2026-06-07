@@ -1465,7 +1465,10 @@ def render_app(config):
                     most_recent = after_exams.iloc[-1]["score"]
                     avg_score = after_exams["score"].mean()
                     recent_vs_baseline = most_recent - baseline
-                    if recent_vs_baseline <= 0:
+                    # Check against target, not just baseline
+                    target = baseline + 150 if baseline < 1350 else 1500
+                    points_to_target = target - most_recent
+                    if recent_vs_baseline <= 0 or points_to_target > 0:
                         if len(after_exams) >= 2:
                             first_after = after_exams.iloc[0]["score"]
                             trend = "📈 up" if most_recent > first_after else ("📉 down" if most_recent < first_after else "➡️ flat")
@@ -1478,6 +1481,8 @@ def render_app(config):
                             "baseline": baseline,
                             "most_recent": most_recent,
                             "recent_change": recent_vs_baseline,
+                            "target": target,
+                            "points_to_target": points_to_target,
                             "avg_score": avg_score,
                             "num_exams": len(after_exams),
                             "trend": trend,
@@ -1495,6 +1500,7 @@ def render_app(config):
                         f"<tr><td style='padding:1px 0;'>Advisor</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{sc['advisor']}</td></tr>"
                         f"<tr><td style='padding:1px 0;'>Tutor</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{sc['tutor']}</td></tr>"
                         f"<tr><td style='padding:1px 0;'>Scores</td><td style='padding:1px 0; text-align:right; color:#991b1b; font-weight:600;'>{sc['baseline']:.0f} → {sc['most_recent']:.0f} ({sc['recent_change']:+.0f})</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Target</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{sc['target']:.0f} ({sc['points_to_target']:+.0f} needed)</td></tr>"
                         f"<tr><td style='padding:1px 0;'>Exams / Trend</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{sc['num_exams']} exams {sc['trend']}</td></tr>"
                         f"</table></div>"
                     )
@@ -1504,7 +1510,7 @@ def render_app(config):
             alert_configs = [
                 ("⚠️ No Baseline Score", no_baseline_html, len(no_baseline) if len(no_baseline) > 0 else 0),
                 ("⚠️ Behind on Practice Tests", behind_html, len(behind_on_exams)),
-                ("⚠️ No Score Improvement", score_html, len(score_concerns)),
+                ("⚠️ Off Target / No Improvement", score_html, len(score_concerns)),
             ]
             active_alerts = [(label, html, cnt) for label, html, cnt in alert_configs if html]
             if active_alerts:
@@ -1522,6 +1528,13 @@ def render_app(config):
                 if col in sg.columns:
                     sg[col] = pd.to_numeric(sg[col], errors="coerce")
             sg["score_change"] = sg["latest_test_score"] - sg["starting_score"]
+
+            # Score improvement targets
+            sg["target_score"] = sg["starting_score"].apply(
+                lambda x: x + 150 if pd.notna(x) and x < 1350 else (1500 if pd.notna(x) else np.nan)
+            )
+            sg["points_to_target"] = sg["target_score"] - sg["latest_test_score"]
+            sg["on_track"] = sg["latest_test_score"] >= sg["target_score"]
 
             # ── Build compliance checklist per student ─────────────────────────
             compliance_rows = []
@@ -1630,6 +1643,11 @@ def render_app(config):
                             checks["9_final_14days"] = 0 <= days_after <= 14
                             checks["9_days_after"] = int(days_after)
 
+                # Score target tracking
+                checks["target_score"] = row.get("target_score")
+                checks["points_to_target"] = row.get("points_to_target")
+                checks["on_track"] = row.get("on_track")
+
                 checks["student_id"] = sid
                 checks["student"] = row.get("student", "")
                 checks["tutor"] = row.get("tutor", "")
@@ -1728,6 +1746,16 @@ def render_app(config):
                 lambda r: f"{r['starting_score']:.0f}→{r['latest_score']:.0f} ({r['score_change']:+.0f})"
                 if pd.notna(r.get("starting_score")) and pd.notna(r.get("latest_score")) else "—", axis=1
             )
+            matrix["Target"] = filtered_comp.apply(
+                lambda r: f"{r['target_score']:.0f}" if pd.notna(r.get("target_score")) else "—", axis=1
+            )
+            matrix["To Target"] = filtered_comp.apply(
+                lambda r: (
+                    f"✅ +{abs(r['points_to_target']):.0f} ahead" if pd.notna(r.get("on_track")) and bool(r["on_track"])
+                    else f"❌ {r['points_to_target']:.0f} needed" if pd.notna(r.get("points_to_target"))
+                    else "—"
+                ), axis=1
+            )
             matrix = matrix.rename(columns={"student": "Student", "tutor": "Tutor", "advisor": "Advisor"})
 
             st.dataframe(matrix, hide_index=True, use_container_width=True,
@@ -1763,6 +1791,18 @@ def render_app(config):
                 p7.metric("Latest Score", f"{stu_row['latest_test_score']:.0f}" if pd.notna(stu_row.get("latest_test_score")) else "—")
                 score_ch = stu_row.get("score_change")
                 p8.metric("Score Change", f"{score_ch:+.0f}" if pd.notna(score_ch) else "—")
+
+                # Target score info
+                target_score = stu_row.get("target_score")
+                points_to = stu_row.get("points_to_target")
+                if pd.notna(target_score):
+                    t1, t2 = st.columns(2)
+                    t1.metric("Target Score", f"{target_score:.0f}")
+                    if pd.notna(points_to):
+                        if points_to <= 0:
+                            t2.metric("Status", f"✅ Target reached (+{abs(points_to):.0f} ahead)")
+                        else:
+                            t2.metric("Status", f"❌ {points_to:.0f} points needed")
 
                 # Compliance summary for this student
                 stu_comp = comp_df[comp_df["student_id"] == sid]
