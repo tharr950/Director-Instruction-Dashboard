@@ -348,6 +348,43 @@ def render_app(config):
         decoded = base64.b64decode(r.json()["content"]).decode("utf-8")
         return pd.read_csv(io.StringIO(decoded))
 
+    def load_sg_legend():
+        token = st.secrets.get("github", {}).get("token", "")
+        repo = st.secrets.get("github", {}).get("repo", "")
+        path = "data/score_guarantee_legend.csv"
+        if not token or not repo:
+            return {}
+        url = f"https://api.github.com/repos/{repo}/contents/{path}"
+        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code != 200:
+            return {}
+        import io
+        decoded = base64.b64decode(r.json()["content"]).decode("utf-8")
+        df = pd.read_csv(io.StringIO(decoded))
+        return dict(zip(df["color"], df["label"]))
+
+    def save_sg_legend(legend_dict):
+        token = st.secrets.get("github", {}).get("token", "")
+        repo = st.secrets.get("github", {}).get("repo", "")
+        path = "data/score_guarantee_legend.csv"
+        if not token or not repo:
+            return False
+        url = f"https://api.github.com/repos/{repo}/contents/{path}"
+        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+        df = pd.DataFrame([{"color": k, "label": v} for k, v in legend_dict.items()])
+        csv_bytes = df.to_csv(index=False).encode("utf-8")
+        encoded = base64.b64encode(csv_bytes).decode("utf-8")
+        r = requests.get(url, headers=headers, timeout=15)
+        payload = {
+            "message": f"Update SG legend — {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}",
+            "content": encoded,
+        }
+        if r.status_code == 200:
+            payload["sha"] = r.json().get("sha")
+        r2 = requests.put(url, headers=headers, json=payload, timeout=30)
+        return r2.status_code in (200, 201)
+
     def save_sg_notes(notes_df):
         token = st.secrets.get("github", {}).get("token", "")
         repo = st.secrets.get("github", {}).get("repo", "")
@@ -398,6 +435,8 @@ def render_app(config):
         df_sg_exams = load_sg_exams()
         if "sg_notes" not in st.session_state:
             st.session_state.sg_notes = load_sg_notes()
+        if "sg_legend" not in st.session_state:
+            st.session_state.sg_legend = load_sg_legend()
     except Exception as e:
         st.error(f"Could not connect to Redshift: {e}")
         st.stop()
@@ -1803,6 +1842,14 @@ def render_app(config):
                 sel_fls = st.multiselect("Filter by Faculty Leader", sg_fls, key="sg_filter_fl")
 
             filtered_comp = comp_df.copy()
+
+            # Color tag filter
+            active_tags = [c for c in filtered_comp["color"].unique() if c and str(c).strip()]
+            if active_tags:
+                tag_filter = st.multiselect("Filter by Tag", sorted(active_tags), key="sg_filter_tag")
+                if tag_filter:
+                    filtered_comp = filtered_comp[filtered_comp["color"].isin(tag_filter)]
+
             if sel_students:
                 filtered_comp = filtered_comp[filtered_comp["student"].isin(sel_students)]
             if sel_tutors:
@@ -1821,9 +1868,13 @@ def render_app(config):
                 return "—"
 
             # Merge notes into comp data
-            notes_merged = st.session_state.sg_notes.copy() if not st.session_state.sg_notes.empty else pd.DataFrame(columns=["student_id", "note"])
-            filtered_comp = filtered_comp.merge(notes_merged[["student_id", "note"]], on="student_id", how="left")
+            notes_merged = st.session_state.sg_notes.copy() if not st.session_state.sg_notes.empty else pd.DataFrame(columns=["student_id", "note", "color"])
+            if "color" not in notes_merged.columns:
+                notes_merged["color"] = ""
+            merge_cols = ["student_id", "note", "color"]
+            filtered_comp = filtered_comp.merge(notes_merged[merge_cols], on="student_id", how="left")
             filtered_comp["note"] = filtered_comp["note"].fillna("")
+            filtered_comp["color"] = filtered_comp["color"].fillna("")
             filtered_comp = filtered_comp.reset_index(drop=True)
 
             matrix = filtered_comp[["student", "tutor", "advisor", "faculty_leader"]].copy()
@@ -1871,11 +1922,13 @@ def render_app(config):
             )
             matrix = matrix.rename(columns={"student": "Student", "tutor": "Tutor", "advisor": "Advisor"})
 
-            # Notes column — always last
+            # Color tag and notes — always last
+            color_options = ["", "🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
+            matrix["Tag"] = filtered_comp["color"]
             matrix["Notes"] = filtered_comp["note"]
 
             # Editable notes in table
-            disabled_cols = [c for c in matrix.columns if c != "Notes"]
+            disabled_cols = [c for c in matrix.columns if c not in ["Notes", "Tag"]]
             # Reorder so Notes is last
             col_order = ["Student", "Tutor", "Advisor"] + [c for c in matrix.columns if c not in ["Student", "Tutor", "Advisor", "Notes"]] + ["Notes"]
             matrix = matrix[col_order]
@@ -1896,7 +1949,12 @@ def render_app(config):
                 "Test": st.column_config.TextColumn("Test", width=50),
                 "Target": st.column_config.TextColumn("Target", width=60),
                 "To Target": st.column_config.TextColumn("To Target", width=130),
-                "Notes": st.column_config.TextColumn("Notes", width="large"),
+                "Tag": st.column_config.SelectboxColumn(
+                        "Tag",
+                        options=["", "🔴", "🟠", "🟡", "🟢", "🔵", "🟣"],
+                        width=60,
+                    ),
+                    "Notes": st.column_config.TextColumn("Notes", width="large"),
             }
             st.markdown("""
             <style>
@@ -1918,22 +1976,61 @@ def render_app(config):
                 key="sg_matrix_editor",
             )
 
+            # ── Color Legend ───────────────────────────────────────────────────
+            legend = st.session_state.sg_legend
+            with st.expander("🎨 Color Legend — click to edit", expanded=False):
+                st.markdown("<p style='color:#64748b; font-size:0.82rem;'>Define what each color tag means:</p>", unsafe_allow_html=True)
+                legend_colors = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
+                new_legend = {}
+                lc1, lc2 = st.columns(2)
+                for idx, color in enumerate(legend_colors):
+                    col = lc1 if idx < 3 else lc2
+                    with col:
+                        label = st.text_input(
+                            f"{color}",
+                            value=legend.get(color, ""),
+                            key=f"legend_{color}",
+                            placeholder="Enter label...",
+                        )
+                        new_legend[color] = label
+
+                if st.button("💾 Save Legend", key="save_legend"):
+                    if save_sg_legend(new_legend):
+                        st.session_state.sg_legend = new_legend
+                        st.rerun()
+
+            # Show active legend inline
+            active_legend = {k: v for k, v in st.session_state.sg_legend.items() if v}
+            if active_legend:
+                legend_str = " &nbsp;&nbsp;|&nbsp;&nbsp; ".join(
+                    [f"{k} {v}" for k, v in active_legend.items()]
+                )
+                st.markdown(
+                    f"<p style='font-size:0.78rem; color:#64748b; margin-bottom:8px;'>{legend_str}</p>",
+                    unsafe_allow_html=True,
+                )
+
             # Detect and save note changes — build a student_id list aligned with matrix rows
             student_ids_ordered = filtered_comp["student_id"].tolist()
             if edited_matrix is not None and len(edited_matrix) == len(student_ids_ordered):
                 changed = False
                 notes_df = st.session_state.sg_notes.copy()
+                if "color" not in notes_df.columns:
+                    notes_df["color"] = ""
                 for i in range(len(edited_matrix)):
                     new_note = str(edited_matrix.iloc[i].get("Notes", "") or "")
+                    new_color = str(edited_matrix.iloc[i].get("Tag", "") or "")
                     old_note = str(filtered_comp.iloc[i].get("note", "") or "")
-                    if new_note != old_note:
+                    old_color = str(filtered_comp.iloc[i].get("color", "") or "")
+                    if new_note != old_note or new_color != old_color:
                         sid = student_ids_ordered[i]
                         now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
                         if sid in notes_df["student_id"].values:
                             notes_df.loc[notes_df["student_id"] == sid, "note"] = new_note
+                            notes_df.loc[notes_df["student_id"] == sid, "color"] = new_color
                             notes_df.loc[notes_df["student_id"] == sid, "updated_at"] = now_str
                         else:
-                            new_row = pd.DataFrame([{"student_id": int(sid), "note": new_note, "updated_at": now_str}])
+                            new_row = pd.DataFrame([{"student_id": int(sid), "note": new_note, "color": new_color, "updated_at": now_str}])
                             notes_df = pd.concat([notes_df, new_row], ignore_index=True)
                         changed = True
                 if changed:
