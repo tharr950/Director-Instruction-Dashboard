@@ -1826,6 +1826,26 @@ def render_app(config):
                 unsafe_allow_html=True,
             )
 
+            with st.expander("📖 What does each column check?", expanded=False):
+                st.markdown("""
+| Column | Requirement |
+|--------|------------|
+| **Pkg ≥20hr** | Package size must be at least 20 hours |
+| **Hrs Used** | Student must complete at least 20 hours of test prep tutoring |
+| **Pace** | Tutoring hours should be completed at a pace of roughly 1–2 hours per week (shown as hrs/wk) |
+| **Baseline** | Student must have a baseline score recorded before their first tutoring session |
+| **Attend** | Student must attend all scheduled sessions — no cancellations or no-shows (shown as attended/total) |
+| **Tests** | Student must take a minimum of 4 practice tests during their program (excluding baseline) |
+| **Gaps ≥7d** | There must be at least 1 week (7 days) between each practice test (shows minimum gap) |
+| **Final ≤14d** | Student must take the official exam within 14 days of their last tutoring session |
+| **Score** | Starting score → latest score (with change). Not a pass/fail check — shown for reference |
+| **Test** | SAT or ACT, auto-detected from baseline score |
+| **Target** | SAT: below 1350 baseline needs +150 points; 1350+ needs to reach 1500. ACT: below 29 needs +2 points; 29+ needs to reach 31 |
+| **To Target** | Whether the student's latest score meets or exceeds the target (✅ ahead / ❌ points needed) |
+| **Tag** | Custom color tag set by Jamie for tracking purposes |
+| **Notes** | Custom notes set by Jamie — persists across sessions |
+""")
+
             # Filters
             fc1, fc2, fc3, fc4 = st.columns(4)
             with fc1:
