@@ -1884,6 +1884,9 @@ def render_app(config):
             if "color" not in notes_merged.columns:
                 notes_merged["color"] = ""
             merge_cols = ["student_id", "note", "color"]
+            # Ensure student_id types match for merge
+            notes_merged["student_id"] = pd.to_numeric(notes_merged["student_id"], errors="coerce")
+            filtered_comp["student_id"] = pd.to_numeric(filtered_comp["student_id"], errors="coerce")
             filtered_comp = filtered_comp.merge(notes_merged[merge_cols], on="student_id", how="left")
             filtered_comp["note"] = filtered_comp["note"].fillna("")
             filtered_comp["color"] = filtered_comp["color"].fillna("")
