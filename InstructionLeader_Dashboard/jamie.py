@@ -2138,6 +2138,12 @@ def render_app(config):
                 notes_df = st.session_state.sg_notes.copy()
                 if "color" not in notes_df.columns:
                     notes_df["color"] = ""
+                # Ensure all columns are string type to avoid dtype errors
+                for col in ["note", "color", "updated_at"]:
+                    if col in notes_df.columns:
+                        notes_df[col] = notes_df[col].astype(str).replace("nan", "")
+                notes_df["student_id"] = notes_df["student_id"].astype(str)
+
                 for i in range(len(edited_matrix)):
                     new_note = str(edited_matrix.iloc[i].get("Notes", "") or "")
                     new_color_raw = str(edited_matrix.iloc[i].get("Tag", "") or "")
@@ -2146,14 +2152,15 @@ def render_app(config):
                     old_color = str(filtered_comp.iloc[i].get("color", "") or "")
 
                     if new_note != old_note or new_color != old_color:
-                        sid = student_ids_ordered[i]
+                        sid = str(student_ids_ordered[i])
                         now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
-                        if sid in notes_df["student_id"].values:
-                            notes_df.loc[notes_df["student_id"] == sid, "note"] = new_note
-                            notes_df.loc[notes_df["student_id"] == sid, "color"] = new_color
-                            notes_df.loc[notes_df["student_id"] == sid, "updated_at"] = now_str
+                        mask = notes_df["student_id"] == sid
+                        if mask.any():
+                            notes_df.loc[mask, "note"] = new_note
+                            notes_df.loc[mask, "color"] = new_color
+                            notes_df.loc[mask, "updated_at"] = now_str
                         else:
-                            new_row = pd.DataFrame([{"student_id": int(sid), "note": new_note, "color": new_color, "updated_at": now_str}])
+                            new_row = pd.DataFrame([{"student_id": sid, "note": new_note, "color": new_color, "updated_at": now_str}])
                             notes_df = pd.concat([notes_df, new_row], ignore_index=True)
                         changed = True
                 if changed:
@@ -2280,11 +2287,17 @@ def render_app(config):
                 if st.button("💾 Save Note", key=f"save_note_{sid}"):
                     now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
                     notes_df = st.session_state.sg_notes.copy()
-                    if sid in notes_df["student_id"].values:
-                        notes_df.loc[notes_df["student_id"] == sid, "note"] = note_input
-                        notes_df.loc[notes_df["student_id"] == sid, "updated_at"] = now_str
+                    for col in ["note", "color", "updated_at"]:
+                        if col in notes_df.columns:
+                            notes_df[col] = notes_df[col].astype(str).replace("nan", "")
+                    notes_df["student_id"] = notes_df["student_id"].astype(str)
+                    sid_str = str(sid)
+                    mask = notes_df["student_id"] == sid_str
+                    if mask.any():
+                        notes_df.loc[mask, "note"] = note_input
+                        notes_df.loc[mask, "updated_at"] = now_str
                     else:
-                        new_row = pd.DataFrame([{"student_id": sid, "note": note_input, "updated_at": now_str}])
+                        new_row = pd.DataFrame([{"student_id": sid_str, "note": note_input, "updated_at": now_str}])
                         notes_df = pd.concat([notes_df, new_row], ignore_index=True)
                     if save_sg_notes(notes_df):
                         st.session_state.sg_notes = notes_df
