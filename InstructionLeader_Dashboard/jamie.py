@@ -1401,6 +1401,39 @@ def render_app(config):
         if df_sg.empty:
             st.warning("Score guarantee data not available. Check GitHub secrets.")
         else:
+            # ── New Student Alert ─────────────────────────────────────────────
+            sg_new_check = df_sg.copy()
+            sg_new_check["won_at"] = pd.to_datetime(sg_new_check["won_at"], errors="coerce")
+            seven_days_ago = pd.Timestamp.now() - pd.DateOffset(days=7)
+            new_students = sg_new_check[sg_new_check["won_at"] >= seven_days_ago].sort_values("student")
+
+            if len(new_students) > 0:
+                items = ""
+                for _, row in new_students.iterrows():
+                    student = row.get("student", "Unknown")
+                    advisor = row.get("advisor", "Unknown")
+                    tutor = row.get("tutor", "Unknown") or "Not assigned"
+                    won = row["won_at"].strftime("%b %d, %Y") if pd.notna(row.get("won_at")) else "—"
+                    pkg = f"{row['package_hours']:.0f} hrs" if pd.notna(row.get("package_hours")) else "—"
+                    items += (
+                        f"<div style='background:white; border:1px solid #bae6fd; border-radius:6px; padding:8px 12px; margin:6px 0;'>"
+                        f"<p style='color:#1e293b; font-weight:600; font-size:0.85rem; margin:0;'>{student}</p>"
+                        f"<table style='width:100%; font-size:0.78rem; color:#64748b; margin-top:4px;'>"
+                        f"<tr><td style='padding:1px 0;'>Advisor</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{advisor}</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Tutor</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{tutor}</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Package</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{pkg}</td></tr>"
+                        f"<tr><td style='padding:1px 0;'>Won Date</td><td style='padding:1px 0; text-align:right; color:#0369a1; font-weight:600;'>{won}</td></tr>"
+                        f"</table></div>"
+                    )
+                st.markdown(
+                    f"<div style='background:#f0f9ff; border:1px solid #bae6fd; border-radius:10px; padding:14px 16px; margin-bottom:16px;'>"
+                    f"<p style='color:#0369a1; font-weight:600; font-size:0.85rem; margin:0 0 8px 0;'>"
+                    f"🆕 NEW SCORE GUARANTEE STUDENTS THIS WEEK ({len(new_students)})</p>"
+                    f"{items}</div>",
+                    unsafe_allow_html=True,
+                )
+                st.markdown("")
+
             # ── Score Guarantee Alerts ────────────────────────────────────────
             sg_alert_data = df_sg.copy()
             for col in ["first_test_prep_session", "starting_test_taken", "won_at"]:
