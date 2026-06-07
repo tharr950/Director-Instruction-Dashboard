@@ -333,6 +333,42 @@ def render_app(config):
         decoded = base64.b64decode(r.json()["content"]).decode("utf-8")
         return pd.read_csv(io.StringIO(decoded))
 
+    def load_sg_notes():
+        token = st.secrets.get("github", {}).get("token", "")
+        repo = st.secrets.get("github", {}).get("repo", "")
+        path = "data/score_guarantee_notes.csv"
+        if not token or not repo:
+            return pd.DataFrame(columns=["student_id", "note", "updated_at"])
+        url = f"https://api.github.com/repos/{repo}/contents/{path}"
+        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code != 200:
+            return pd.DataFrame(columns=["student_id", "note", "updated_at"])
+        import io
+        decoded = base64.b64decode(r.json()["content"]).decode("utf-8")
+        return pd.read_csv(io.StringIO(decoded))
+
+    def save_sg_notes(notes_df):
+        token = st.secrets.get("github", {}).get("token", "")
+        repo = st.secrets.get("github", {}).get("repo", "")
+        path = "data/score_guarantee_notes.csv"
+        if not token or not repo:
+            return False
+        url = f"https://api.github.com/repos/{repo}/contents/{path}"
+        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+        csv_bytes = notes_df.to_csv(index=False).encode("utf-8")
+        encoded = base64.b64encode(csv_bytes).decode("utf-8")
+        # Get existing SHA
+        r = requests.get(url, headers=headers, timeout=15)
+        payload = {
+            "message": f"Update SG notes — {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}",
+            "content": encoded,
+        }
+        if r.status_code == 200:
+            payload["sha"] = r.json().get("sha")
+        r2 = requests.put(url, headers=headers, json=payload, timeout=30)
+        return r2.status_code in (200, 201)
+
     @st.cache_data(ttl=3600)
     def load_sg_exams():
         token = st.secrets.get("github", {}).get("token", "")
@@ -360,6 +396,8 @@ def render_app(config):
         df_sg = load_score_guarantee()
         df_sg_sessions = load_sg_sessions()
         df_sg_exams = load_sg_exams()
+        if "sg_notes" not in st.session_state:
+            st.session_state.sg_notes = load_sg_notes()
     except Exception as e:
         st.error(f"Could not connect to Redshift: {e}")
         st.stop()
@@ -1730,6 +1768,11 @@ def render_app(config):
                     return "❌"
                 return "—"
 
+            # Merge notes into comp data
+            notes_merged = st.session_state.sg_notes.copy() if not st.session_state.sg_notes.empty else pd.DataFrame(columns=["student_id", "note"])
+            filtered_comp = filtered_comp.merge(notes_merged[["student_id", "note"]], on="student_id", how="left")
+            filtered_comp["note"] = filtered_comp["note"].fillna("")
+
             matrix = filtered_comp[["student", "tutor", "advisor"]].copy()
             matrix["Pkg ≥20hr"] = filtered_comp.apply(
                 lambda r: f"{status_icon(r['1_pkg_20hrs'])} {r['package_hours']:.0f}hr" if pd.notna(r.get("package_hours")) else "—", axis=1
@@ -1765,6 +1808,7 @@ def render_app(config):
             matrix["Target"] = filtered_comp.apply(
                 lambda r: f"{r['target_score']:.0f}" if pd.notna(r.get("target_score")) else "—", axis=1
             )
+            matrix["Notes"] = filtered_comp["note"].apply(lambda x: x[:50] + "..." if len(str(x)) > 50 else x)
             matrix["To Target"] = filtered_comp.apply(
                 lambda r: (
                     f"✅ +{abs(r['points_to_target']):.0f} ahead" if pd.notna(r.get("on_track")) and bool(r["on_track"])
@@ -1876,6 +1920,36 @@ def render_app(config):
                                 f"**Attended:** {int(stu_sess['attended'].sum())}/{len(stu_sess)}")
                 else:
                     st.info("No session data available for this student.")
+
+                # Notes
+                st.markdown("")
+                st.markdown("**Notes:**")
+                existing_note = ""
+                notes_df = st.session_state.sg_notes
+                if not notes_df.empty and sid in notes_df["student_id"].values:
+                    existing_note = notes_df[notes_df["student_id"] == sid]["note"].iloc[0]
+                    if pd.isna(existing_note):
+                        existing_note = ""
+                    last_updated = notes_df[notes_df["student_id"] == sid]["updated_at"].iloc[0]
+                    if pd.notna(last_updated):
+                        st.markdown(f"<p style='color:#94a3b8; font-size:0.75rem;'>Last updated: {last_updated}</p>", unsafe_allow_html=True)
+
+                note_input = st.text_area("Add or edit notes for this student:", value=existing_note, height=120, key=f"note_{sid}")
+
+                if st.button("💾 Save Note", key=f"save_note_{sid}"):
+                    now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+                    notes_df = st.session_state.sg_notes.copy()
+                    if sid in notes_df["student_id"].values:
+                        notes_df.loc[notes_df["student_id"] == sid, "note"] = note_input
+                        notes_df.loc[notes_df["student_id"] == sid, "updated_at"] = now_str
+                    else:
+                        new_row = pd.DataFrame([{"student_id": sid, "note": note_input, "updated_at": now_str}])
+                        notes_df = pd.concat([notes_df, new_row], ignore_index=True)
+                    if save_sg_notes(notes_df):
+                        st.session_state.sg_notes = notes_df
+                        st.success("Note saved!")
+                    else:
+                        st.error("Failed to save note. Check GitHub credentials.")
 
                 # Exams table
                 st.markdown("")
