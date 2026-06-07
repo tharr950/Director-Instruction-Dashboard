@@ -1466,7 +1466,10 @@ def render_app(config):
                     avg_score = after_exams["score"].mean()
                     recent_vs_baseline = most_recent - baseline
                     # Check against target, not just baseline
-                    target = baseline + 150 if baseline < 1350 else 1500
+                    if baseline > 100:  # SAT
+                        target = baseline + 150 if baseline < 1350 else 1500
+                    else:  # ACT
+                        target = baseline + 2 if baseline < 29 else 31
                     points_to_target = target - most_recent
                     if recent_vs_baseline <= 0 or points_to_target > 0:
                         if len(after_exams) >= 2:
@@ -1529,10 +1532,18 @@ def render_app(config):
                     sg[col] = pd.to_numeric(sg[col], errors="coerce")
             sg["score_change"] = sg["latest_test_score"] - sg["starting_score"]
 
-            # Score improvement targets
-            sg["target_score"] = sg["starting_score"].apply(
-                lambda x: x + 150 if pd.notna(x) and x < 1350 else (1500 if pd.notna(x) else np.nan)
+            # Score improvement targets (SAT: 400-1600 range, ACT: 1-36 range)
+            def calc_target(score):
+                if pd.isna(score):
+                    return np.nan
+                if score > 100:  # SAT
+                    return score + 150 if score < 1350 else 1500
+                else:  # ACT
+                    return score + 2 if score < 29 else 31
+            sg["test_type"] = sg["starting_score"].apply(
+                lambda x: "SAT" if pd.notna(x) and x > 100 else ("ACT" if pd.notna(x) else None)
             )
+            sg["target_score"] = sg["starting_score"].apply(calc_target)
             sg["points_to_target"] = sg["target_score"] - sg["latest_test_score"]
             sg["on_track"] = sg["latest_test_score"] >= sg["target_score"]
 
@@ -1746,6 +1757,9 @@ def render_app(config):
                 lambda r: f"{r['starting_score']:.0f}→{r['latest_score']:.0f} ({r['score_change']:+.0f})"
                 if pd.notna(r.get("starting_score")) and pd.notna(r.get("latest_score")) else "—", axis=1
             )
+            matrix["Test"] = filtered_comp.apply(
+                lambda r: "SAT" if pd.notna(r.get("starting_score")) and r["starting_score"] > 100 else ("ACT" if pd.notna(r.get("starting_score")) else "—"), axis=1
+            )
             matrix["Target"] = filtered_comp.apply(
                 lambda r: f"{r['target_score']:.0f}" if pd.notna(r.get("target_score")) else "—", axis=1
             )
@@ -1793,16 +1807,18 @@ def render_app(config):
                 p8.metric("Score Change", f"{score_ch:+.0f}" if pd.notna(score_ch) else "—")
 
                 # Target score info
+                test_type = stu_row.get("test_type", "—")
                 target_score = stu_row.get("target_score")
                 points_to = stu_row.get("points_to_target")
                 if pd.notna(target_score):
-                    t1, t2 = st.columns(2)
-                    t1.metric("Target Score", f"{target_score:.0f}")
+                    t1, t2, t3 = st.columns(3)
+                    t1.metric("Test Type", test_type or "—")
+                    t2.metric("Target Score", f"{target_score:.0f}")
                     if pd.notna(points_to):
                         if points_to <= 0:
-                            t2.metric("Status", f"✅ Target reached (+{abs(points_to):.0f} ahead)")
+                            t3.metric("Status", f"✅ Target reached (+{abs(points_to):.0f} ahead)")
                         else:
-                            t2.metric("Status", f"❌ {points_to:.0f} points needed")
+                            t3.metric("Status", f"❌ {points_to:.0f} points needed")
 
                 # Compliance summary for this student
                 stu_comp = comp_df[comp_df["student_id"] == sid]
