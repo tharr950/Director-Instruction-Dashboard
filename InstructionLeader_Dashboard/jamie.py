@@ -1556,10 +1556,10 @@ def render_app(config):
                 # 1. Package 20+ hours
                 checks["1_pkg_20hrs"] = row["package_hours"] >= 20 if pd.notna(row["package_hours"]) else False
 
-                # 2. Used full hours
+                # 2. Used 20+ hours of test prep tutoring
                 checks["2_hours_used"] = (
-                    row["completed_test_prep_hours"] >= row["package_hours"]
-                    if pd.notna(row["completed_test_prep_hours"]) and pd.notna(row["package_hours"])
+                    row["completed_test_prep_hours"] >= 20
+                    if pd.notna(row["completed_test_prep_hours"])
                     else False
                 )
 
@@ -1733,7 +1733,7 @@ def render_app(config):
                 lambda r: f"{status_icon(r['1_pkg_20hrs'])} {r['package_hours']:.0f}hr" if pd.notna(r.get("package_hours")) else "—", axis=1
             )
             matrix["Hrs Used"] = filtered_comp.apply(
-                lambda r: f"{status_icon(r['2_hours_used'])} {r['completed_hours']:.1f}/{r['package_hours']:.0f}" if pd.notna(r.get("completed_hours")) and pd.notna(r.get("package_hours")) else "—", axis=1
+                lambda r: f"{status_icon(r['2_hours_used'])} {r['completed_hours']:.1f}/20" if pd.notna(r.get("completed_hours")) else "—", axis=1
             )
             matrix["Pace"] = filtered_comp.apply(
                 lambda r: f"{status_icon(r['3_pace_ok'])} ({r['3_pace_val']:.1f}/wk)" if pd.notna(r.get("3_pace_val")) else status_icon(r["3_pace_ok"]), axis=1
@@ -1834,8 +1834,8 @@ def render_app(config):
                     lines = []
                     lines.append(check_line("Package ≥ 20 hours", sc.get("1_pkg_20hrs"),
                         f"— {sc.get('package_hours', 0):.0f} hours" if pd.notna(sc.get("package_hours")) else ""))
-                    lines.append(check_line("Used full package hours", sc.get("2_hours_used"),
-                        f"— {sc.get('completed_hours', 0):.1f} / {sc.get('package_hours', 0):.0f} hrs" if pd.notna(sc.get("completed_hours")) else ""))
+                    lines.append(check_line("Used 20+ hours of test prep tutoring", sc.get("2_hours_used"),
+                        f"— {sc.get('completed_hours', 0):.1f} / 20 hrs" if pd.notna(sc.get("completed_hours")) else ""))
                     lines.append(check_line("Pace 1-2 hrs/week", sc.get("3_pace_ok"),
                         f"— {sc.get('3_pace_val', 0):.1f} hrs/wk" if pd.notna(sc.get("3_pace_val")) else ""))
                     lines.append(check_line("Baseline score before first session", sc.get("4_baseline")))
