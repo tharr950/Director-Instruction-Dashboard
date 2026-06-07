@@ -1808,7 +1808,7 @@ def render_app(config):
             matrix["Target"] = filtered_comp.apply(
                 lambda r: f"{r['target_score']:.0f}" if pd.notna(r.get("target_score")) else "—", axis=1
             )
-            matrix["Notes"] = filtered_comp["note"].apply(lambda x: x[:50] + "..." if len(str(x)) > 50 else x)
+            matrix["Notes"] = filtered_comp["note"]
             matrix["To Target"] = filtered_comp.apply(
                 lambda r: (
                     f"✅ +{abs(r['points_to_target']):.0f} ahead" if pd.notna(r.get("on_track")) and bool(r["on_track"])
@@ -1818,8 +1818,44 @@ def render_app(config):
             )
             matrix = matrix.rename(columns={"student": "Student", "tutor": "Tutor", "advisor": "Advisor"})
 
-            st.dataframe(matrix, hide_index=True, use_container_width=True,
-                         height=min(700, len(matrix) * 35 + 60))
+            # Editable notes in table
+            disabled_cols = [c for c in matrix.columns if c != "Notes"]
+            edited_matrix = st.data_editor(
+                matrix,
+                hide_index=True,
+                use_container_width=True,
+                height=min(700, len(matrix) * 35 + 60),
+                disabled=disabled_cols,
+                column_config={
+                    "Notes": st.column_config.TextColumn(
+                        "Notes",
+                        width="large",
+                    ),
+                },
+                key="sg_matrix_editor",
+            )
+
+            # Detect and save note changes
+            if edited_matrix is not None:
+                changed = False
+                notes_df = st.session_state.sg_notes.copy()
+                for idx, row in edited_matrix.iterrows():
+                    new_note = row.get("Notes", "")
+                    old_note = matrix.iloc[idx]["Notes"] if idx < len(matrix) else ""
+                    if str(new_note) != str(old_note):
+                        sid = filtered_comp.iloc[idx]["student_id"]
+                        now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+                        if sid in notes_df["student_id"].values:
+                            notes_df.loc[notes_df["student_id"] == sid, "note"] = new_note
+                            notes_df.loc[notes_df["student_id"] == sid, "updated_at"] = now_str
+                        else:
+                            new_row = pd.DataFrame([{"student_id": sid, "note": new_note, "updated_at": now_str}])
+                            notes_df = pd.concat([notes_df, new_row], ignore_index=True)
+                        changed = True
+                if changed:
+                    if save_sg_notes(notes_df):
+                        st.session_state.sg_notes = notes_df
+                        st.rerun()
 
             # ── Student Detail Drilldown ──────────────────────────────────────
             st.markdown("")
@@ -1947,7 +1983,7 @@ def render_app(config):
                         notes_df = pd.concat([notes_df, new_row], ignore_index=True)
                     if save_sg_notes(notes_df):
                         st.session_state.sg_notes = notes_df
-                        st.success("Note saved!")
+                        st.rerun()
                     else:
                         st.error("Failed to save note. Check GitHub credentials.")
 
