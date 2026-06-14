@@ -499,15 +499,18 @@ def render_app(config):
                             else:
                                 sg.loc[sg_idx, "latest_test_score"] = np.nan
                                 sg.loc[sg_idx, "last_test_taken"] = pd.NaT
-                        sg.loc[sg_idx, "test_type"] = ov
+                        sg.at[sg_idx, "test_type"] = ov
                         # Recalculate derived fields
-                        s_score = sg.loc[sg_idx, "starting_score"]
-                        l_score = sg.loc[sg_idx, "latest_test_score"]
-                        sg.loc[sg_idx, "score_change"] = l_score - s_score if pd.notna(l_score) and pd.notna(s_score) else np.nan
-                        sg.loc[sg_idx, "target_score"] = calc_target_with_type(s_score, ov) if pd.notna(s_score) else np.nan
-                        t_score = sg.loc[sg_idx, "target_score"]
-                        sg.loc[sg_idx, "points_to_target"] = t_score - l_score if pd.notna(l_score) and pd.notna(t_score) else np.nan
-                        sg.loc[sg_idx, "on_track"] = l_score >= t_score if pd.notna(l_score) and pd.notna(t_score) else None
+                        s_score = sg.at[sg_idx, "starting_score"]
+                        l_score = sg.at[sg_idx, "latest_test_score"]
+                        sg.at[sg_idx, "score_change"] = float(l_score - s_score) if pd.notna(l_score) and pd.notna(s_score) else np.nan
+                        sg.at[sg_idx, "target_score"] = float(calc_target_with_type(s_score, ov)) if pd.notna(s_score) else np.nan
+                        t_score = sg.at[sg_idx, "target_score"]
+                        sg.at[sg_idx, "points_to_target"] = float(t_score - l_score) if pd.notna(l_score) and pd.notna(t_score) else np.nan
+                        if pd.notna(l_score) and pd.notna(t_score):
+                            sg.at[sg_idx, "on_track"] = bool(l_score >= t_score)
+                        else:
+                            sg.at[sg_idx, "on_track"] = None
                         break
 
         # DEBUG: show what overrides were found
