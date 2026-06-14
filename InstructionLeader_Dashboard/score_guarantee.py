@@ -988,7 +988,10 @@ def render_app(config):
             labeled_options = list(tag_to_labeled.values())
 
             eq_students = sorted(sg["student"].dropna().unique())
-            eq_selected = st.selectbox("Select student:", eq_students, key="eq_student_select")
+            default_idx = 0
+            if "sg_active_student" in st.session_state and st.session_state["sg_active_student"] in eq_students:
+                default_idx = eq_students.index(st.session_state["sg_active_student"])
+            eq_selected = st.selectbox("Select student:", eq_students, index=default_idx, key="eq_student_select")
 
             if eq_selected:
                 eq_row = sg[sg["student"] == eq_selected].iloc[0]
@@ -1156,7 +1159,10 @@ def render_app(config):
         )
 
         student_names = sorted(sg["student"].dropna().unique())
-        selected_student = st.selectbox("Select a student:", student_names, key="sg_student_select")
+        detail_default_idx = 0
+        if "sg_active_student" in st.session_state and st.session_state["sg_active_student"] in student_names:
+            detail_default_idx = student_names.index(st.session_state["sg_active_student"])
+        selected_student = st.selectbox("Select a student:", student_names, index=detail_default_idx, key="sg_student_select")
 
         if selected_student:
             stu_row = sg[sg["student"] == selected_student].iloc[0]
