@@ -1011,6 +1011,49 @@ def render_app(config):
                 lambda x: labeled_to_tag.get(str(x).strip(), x.split(" ")[0] if x else "") if x else ""
             )
 
+            # ── Multiline Notes Editor ────────────────────────────────────
+            st.markdown("---")
+            st.markdown("**📝 Edit Notes (multiline)**")
+            qn_students = sorted(sg["student"].dropna().unique())
+            qn_selected = st.selectbox("Select student:", qn_students, key="qn_student_select")
+            if qn_selected:
+                qn_row = sg[sg["student"] == qn_selected].iloc[0]
+                qn_sid = qn_row["student_id"]
+                qn_existing = ""
+                qn_notes_df = st.session_state.sg_notes
+                if not qn_notes_df.empty:
+                    sid_str = str(qn_sid).split(".")[0]
+                    mask = qn_notes_df["student_id"].astype(str).str.split(".").str[0] == sid_str
+                    if mask.any():
+                        qn_existing = str(qn_notes_df.loc[mask, "note"].iloc[0])
+                        if qn_existing == "nan":
+                            qn_existing = ""
+                        qn_updated = qn_notes_df.loc[mask, "updated_at"].iloc[0]
+                        if pd.notna(qn_updated) and str(qn_updated) != "nan":
+                            st.markdown(f"<p style='color:#94a3b8; font-size:0.75rem;'>Last updated: {qn_updated}</p>", unsafe_allow_html=True)
+
+                qn_input = st.text_area("Notes:", value=qn_existing, height=150, key=f"qn_note_{qn_sid}")
+                if st.button("💾 Save Note", key=f"qn_save_{qn_sid}"):
+                    now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+                    save_notes = st.session_state.sg_notes.copy()
+                    for col in ["note", "color", "updated_at"]:
+                        if col in save_notes.columns:
+                            save_notes[col] = save_notes[col].astype(str).replace("nan", "")
+                    if "test_type_override" in save_notes.columns:
+                        save_notes["test_type_override"] = save_notes["test_type_override"].astype(str).replace("nan", "")
+                    save_notes["student_id"] = save_notes["student_id"].astype(str)
+                    sid_s = str(qn_sid).split(".")[0]
+                    m = save_notes["student_id"].str.split(".").str[0] == sid_s
+                    if m.any():
+                        save_notes.loc[m, "note"] = qn_input
+                        save_notes.loc[m, "updated_at"] = now_str
+                    else:
+                        new_r = pd.DataFrame([{"student_id": sid_s, "note": qn_input, "color": "", "test_type_override": "", "updated_at": now_str}])
+                        save_notes = pd.concat([save_notes, new_r], ignore_index=True)
+                    if save_sg_notes(save_notes):
+                        st.session_state.sg_notes = save_notes
+                        st.rerun()
+
         # ── Color Legend ───────────────────────────────────────────────────
         legend = st.session_state.sg_legend
         with st.expander("🎨 Color Legend — click to edit", expanded=False):
