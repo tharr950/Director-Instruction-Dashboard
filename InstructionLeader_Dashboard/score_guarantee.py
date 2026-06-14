@@ -916,14 +916,6 @@ def render_app(config):
             return [""] * len(row)
 
         styled = matrix.style.apply(shade_rows, axis=1)
-        # Quick select — syncs to editor and detail sections
-        qs_students = [""] + sorted(filtered_comp["student"].dropna().unique())
-        qs_col1, qs_col2 = st.columns([1, 3])
-        with qs_col1:
-            qs = st.selectbox("⚡ Quick select student:", qs_students, index=0, key="sg_quick_select")
-            if qs:
-                st.session_state["sg_active_student"] = qs
-
         st.dataframe(
             styled,
             hide_index=True,
@@ -1158,6 +1150,7 @@ def render_app(config):
                     st.session_state.sg_notes = notes_df
                     st.rerun()
 
+        st.markdown("<div id='student-detail-anchor'></div>", unsafe_allow_html=True)
         # ── Student Detail Drilldown ──────────────────────────────────────
         st.markdown("")
         st.markdown(
