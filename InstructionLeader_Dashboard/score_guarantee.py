@@ -468,14 +468,13 @@ def render_app(config):
         sg["points_to_target"] = sg["target_score"] - sg["latest_test_score"]
         sg["on_track"] = sg["latest_test_score"] >= sg["target_score"]
 
-        # ── Merge test type overrides into sg before compliance check ─────
-        notes_for_override = st.session_state.sg_notes.copy() if not st.session_state.sg_notes.empty else pd.DataFrame(columns=["student_id", "test_type_override"])
-        if "test_type_override" not in notes_for_override.columns:
-            notes_for_override["test_type_override"] = ""
-        notes_for_override["student_id"] = pd.to_numeric(notes_for_override["student_id"], errors="coerce")
-        sg["student_id"] = pd.to_numeric(sg["student_id"], errors="coerce")
-        sg = sg.merge(notes_for_override[["student_id", "test_type_override"]], on="student_id", how="left")
-        sg["test_type_override"] = sg["test_type_override"].fillna("")
+        # ── Build test type override lookup ────────────────────────────────
+        override_lookup = {}
+        if not st.session_state.sg_notes.empty and "test_type_override" in st.session_state.sg_notes.columns:
+            for _, nr in st.session_state.sg_notes.iterrows():
+                val = str(nr.get("test_type_override", "") or "")
+                if val in ["SAT", "ACT"]:
+                    override_lookup[str(nr["student_id"]).split(".")[0]] = val
 
         # ── Build compliance checklist per student ─────────────────────────
         compliance_rows = []
@@ -484,7 +483,7 @@ def render_app(config):
             checks = {}
 
             # Check for test type override
-            override = row.get("test_type_override", "")
+            override = override_lookup.get(str(sid).split(".")[0], "")
             if override and override in ["SAT", "ACT"] and not df_sg_exams.empty and sid in df_sg_exams["student_id"].values:
                 stu_all_exams = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
                 stu_all_exams["exam_date"] = pd.to_datetime(stu_all_exams["exam_date"], errors="coerce")
