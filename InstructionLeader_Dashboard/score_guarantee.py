@@ -510,6 +510,14 @@ def render_app(config):
                         sg.loc[sg_idx, "on_track"] = l_score >= t_score if pd.notna(l_score) and pd.notna(t_score) else None
                         break
 
+        # DEBUG: show what overrides were found
+        st.write("DEBUG notes columns:", list(st.session_state.sg_notes.columns) if not st.session_state.sg_notes.empty else "empty")
+        if not st.session_state.sg_notes.empty and "test_type_override" in st.session_state.sg_notes.columns:
+            overrides_found = st.session_state.sg_notes[st.session_state.sg_notes["test_type_override"].isin(["SAT", "ACT"])]
+            st.write("DEBUG overrides found:", len(overrides_found))
+            if len(overrides_found) > 0:
+                st.write(overrides_found[["student_id", "test_type_override"]].to_dict())
+
         # ── Build compliance checklist per student ─────────────────────────
         compliance_rows = []
         for _, row in sg.iterrows():
