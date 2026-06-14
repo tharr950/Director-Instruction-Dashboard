@@ -717,6 +717,7 @@ def render_app(config):
 | **Tests** | Student must take a minimum of 4 practice tests during their program (excluding baseline) |
 | **Gaps ≥7d** | There must be at least 1 week (7 days) between each practice test (shows minimum gap) |
 | **Sess Gap** | Flags if there's a gap of 2+ weeks (14 days) between any tutoring sessions. ⚠️ = gap found, ✅ = no gaps |
+| **Sess Gap** | Flags if there is a gap of 2+ weeks (14 days) between any consecutive tutoring sessions. ⚠️ = gap found with max gap shown, ✅ = no gaps |
 | **Final ≤14d** | Student must take the official exam within 14 days of their last tutoring session |
 | **Score** | Starting score → latest score (with change). Not a pass/fail check — shown for reference |
 | **Test** | SAT or ACT, auto-detected from baseline score |
@@ -1056,6 +1057,7 @@ def render_app(config):
         legend = st.session_state.sg_legend
         with st.expander("🎨 Color Legend — click to edit", expanded=False):
             st.markdown("<p style='color:#64748b; font-size:0.82rem;'>Define what each color tag means:</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color:#94a3b8; font-size:0.75rem; font-style:italic;'>💡 Students tagged with labels named exactly \"Not Score Guarantee\" or \"Completed\" will be automatically hidden from all tables and alerts. Use the checkbox above the table to show them again.</p>", unsafe_allow_html=True)
             legend_colors = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
             new_legend = {}
             lc1, lc2 = st.columns(2)
