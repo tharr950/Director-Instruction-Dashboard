@@ -965,96 +965,94 @@ def render_app(config):
             )
 
         # Editable tag and notes in expander
-        with st.expander("✏️ Edit Tags & Notes", expanded=False):
+        with st.expander("✏️ Edit Tags, Test Type & Notes", expanded=False):
             legend = st.session_state.sg_legend
             tag_emojis = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
-            labeled_options = [""] + [f"{e} {legend[e]}" if legend.get(e) else e for e in tag_emojis]
-            tag_to_labeled = {"": ""}
+            tag_to_labeled = {"": "— None —"}
             for e in tag_emojis:
                 tag_to_labeled[e] = f"{e} {legend[e]}" if legend.get(e) else e
             labeled_to_tag = {v: k for k, v in tag_to_labeled.items()}
+            labeled_options = list(tag_to_labeled.values())
 
-            edit_df = matrix[["Student", "Tag", "Notes"]].copy()
-            edit_df["Test Type"] = filtered_comp["test_type_override"].apply(
-                lambda x: x if x in ["SAT", "ACT"] else "Auto"
-            )
-            edit_df = edit_df[["Student", "Test Type", "Tag", "Notes"]]
-            edit_df["Tag"] = edit_df["Tag"].apply(lambda x: tag_to_labeled.get(str(x).strip(), x) if x else "")
+            eq_students = sorted(sg["student"].dropna().unique())
+            eq_selected = st.selectbox("Select student:", eq_students, key="eq_student_select")
 
-            edited_matrix_raw = st.data_editor(
-                edit_df,
-                hide_index=True,
-                use_container_width=True,
-                height=min(500, len(edit_df) * 40 + 60),
-                disabled=["Student"],
-                column_config={
-                    "Student": st.column_config.TextColumn("Student", width=180),
-                    "Test Type": st.column_config.SelectboxColumn(
-                        "Test Type",
-                        options=["Auto", "SAT", "ACT"],
-                        width=80,
-                    ),
-                    "Tag": st.column_config.SelectboxColumn(
-                        "Tag",
-                        options=labeled_options,
-                        width=150,
-                    ),
-                    "Notes": st.column_config.TextColumn("Notes", width="large"),
-                },
-                num_rows="fixed",
-                key="sg_matrix_editor",
-            )
+            if eq_selected:
+                eq_row = sg[sg["student"] == eq_selected].iloc[0]
+                eq_sid = eq_row["student_id"]
+                sid_str = str(eq_sid).split(".")[0]
 
-            # Convert labeled tags back to emoji-only for storage
-            edited_matrix = edited_matrix_raw.copy()
-            edited_matrix["Tag"] = edited_matrix["Tag"].apply(
-                lambda x: labeled_to_tag.get(str(x).strip(), x.split(" ")[0] if x else "") if x else ""
-            )
-
-            # ── Multiline Notes Editor ────────────────────────────────────
-            st.markdown("---")
-            st.markdown("**📝 Edit Notes (multiline)**")
-            qn_students = sorted(sg["student"].dropna().unique())
-            qn_selected = st.selectbox("Select student:", qn_students, key="qn_student_select")
-            if qn_selected:
-                qn_row = sg[sg["student"] == qn_selected].iloc[0]
-                qn_sid = qn_row["student_id"]
-                qn_existing = ""
-                qn_notes_df = st.session_state.sg_notes
-                if not qn_notes_df.empty:
-                    sid_str = str(qn_sid).split(".")[0]
-                    mask = qn_notes_df["student_id"].astype(str).str.split(".").str[0] == sid_str
+                # Load existing values
+                eq_existing_note = ""
+                eq_existing_color = ""
+                eq_existing_test = ""
+                eq_updated = ""
+                eq_notes_df = st.session_state.sg_notes
+                if not eq_notes_df.empty:
+                    mask = eq_notes_df["student_id"].astype(str).str.split(".").str[0] == sid_str
                     if mask.any():
-                        qn_existing = str(qn_notes_df.loc[mask, "note"].iloc[0])
-                        if qn_existing == "nan":
-                            qn_existing = ""
-                        qn_updated = qn_notes_df.loc[mask, "updated_at"].iloc[0]
-                        if pd.notna(qn_updated) and str(qn_updated) != "nan":
-                            st.markdown(f"<p style='color:#94a3b8; font-size:0.75rem;'>Last updated: {qn_updated}</p>", unsafe_allow_html=True)
+                        row_data = eq_notes_df.loc[mask].iloc[0]
+                        eq_existing_note = str(row_data.get("note", ""))
+                        if eq_existing_note == "nan":
+                            eq_existing_note = ""
+                        eq_existing_color = str(row_data.get("color", ""))
+                        if eq_existing_color == "nan":
+                            eq_existing_color = ""
+                        eq_existing_test = str(row_data.get("test_type_override", ""))
+                        if eq_existing_test == "nan":
+                            eq_existing_test = ""
+                        eq_updated = str(row_data.get("updated_at", ""))
+                        if eq_updated == "nan":
+                            eq_updated = ""
 
-                qn_input = st.text_area("Notes:", value=qn_existing, height=150, key=f"qn_note_{qn_sid}")
-                if st.button("💾 Save Note", key=f"qn_save_{qn_sid}"):
+                # Show current student info
+                st.markdown(f"**Tutor:** {eq_row.get('tutor', '—')} | **Advisor:** {eq_row.get('advisor', '—')} | **FL:** {eq_row.get('faculty_leader', '—')}")
+                if eq_updated:
+                    st.markdown(f"<p style='color:#94a3b8; font-size:0.75rem;'>Last updated: {eq_updated}</p>", unsafe_allow_html=True)
+
+                ec1, ec2 = st.columns(2)
+                with ec1:
+                    current_tag_label = tag_to_labeled.get(eq_existing_color, "— None —")
+                    eq_tag = st.selectbox("Tag:", labeled_options, index=labeled_options.index(current_tag_label) if current_tag_label in labeled_options else 0, key="eq_tag")
+                with ec2:
+                    test_options = ["Auto", "SAT", "ACT"]
+                    current_test = eq_existing_test if eq_existing_test in ["SAT", "ACT"] else "Auto"
+                    eq_test = st.selectbox("Test Type:", test_options, index=test_options.index(current_test), key="eq_test")
+
+                eq_note = st.text_area("Notes:", value=eq_existing_note, height=150, key=f"eq_note_{eq_sid}")
+
+                if st.button("💾 Save Changes", key=f"eq_save_{eq_sid}", use_container_width=True):
                     now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+                    save_color = labeled_to_tag.get(eq_tag, "")
+                    save_test = "" if eq_test == "Auto" else eq_test
+
                     save_notes = st.session_state.sg_notes.copy()
                     for col in ["note", "color", "updated_at"]:
                         if col in save_notes.columns:
                             save_notes[col] = save_notes[col].astype(str).replace("nan", "")
-                    if "test_type_override" in save_notes.columns:
-                        save_notes["test_type_override"] = save_notes["test_type_override"].astype(str).replace("nan", "")
+                    if "test_type_override" not in save_notes.columns:
+                        save_notes["test_type_override"] = ""
+                    save_notes["test_type_override"] = save_notes["test_type_override"].astype(str).replace("nan", "")
                     save_notes["student_id"] = save_notes["student_id"].astype(str)
-                    sid_s = str(qn_sid).split(".")[0]
-                    m = save_notes["student_id"].str.split(".").str[0] == sid_s
+
+                    m = save_notes["student_id"].str.split(".").str[0] == sid_str
                     if m.any():
-                        save_notes.loc[m, "note"] = qn_input
+                        save_notes.loc[m, "note"] = eq_note
+                        save_notes.loc[m, "color"] = save_color
+                        save_notes.loc[m, "test_type_override"] = save_test
                         save_notes.loc[m, "updated_at"] = now_str
                     else:
-                        new_r = pd.DataFrame([{"student_id": sid_s, "note": qn_input, "color": "", "test_type_override": "", "updated_at": now_str}])
+                        new_r = pd.DataFrame([{"student_id": sid_str, "note": eq_note, "color": save_color, "test_type_override": save_test, "updated_at": now_str}])
                         save_notes = pd.concat([save_notes, new_r], ignore_index=True)
+
                     if save_sg_notes(save_notes):
                         st.session_state.sg_notes = save_notes
                         st.rerun()
 
-        # ── Color Legend ───────────────────────────────────────────────────
+            # Set edited_matrix to None so the old change detection doesn't run
+            edited_matrix = None
+
+                # ── Color Legend ───────────────────────────────────────────────────
         legend = st.session_state.sg_legend
         with st.expander("🎨 Color Legend — click to edit", expanded=False):
             st.markdown("<p style='color:#64748b; font-size:0.82rem;'>Define what each color tag means:</p>", unsafe_allow_html=True)
@@ -1088,9 +1086,8 @@ def render_app(config):
                 unsafe_allow_html=True,
             )
 
-        # Detect and save note changes — build a student_id list aligned with matrix rows
-        student_ids_ordered = filtered_comp["student_id"].tolist()
-        if edited_matrix is not None and len(edited_matrix) == len(student_ids_ordered):
+        # Detect and save note/tag changes from expander
+        if edited_matrix is not None and False:  # disabled — handled in expander
             changed = False
             notes_df = st.session_state.sg_notes.copy()
             if "color" not in notes_df.columns:
