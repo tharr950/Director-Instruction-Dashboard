@@ -373,7 +373,17 @@ def render_app(config):
                 else:  # ACT
                     target = baseline + 2 if baseline < 29 else 31
                 points_to_target = target - most_recent
-                if recent_vs_baseline <= 0 or points_to_target > 0:
+
+                    # Check if on pace toward target
+                    on_pace = False
+                    if len(after_exams) >= 2 and points_to_target > 0:
+                        total_needed = target - baseline
+                        expected = (total_needed / 4.0) * len(after_exams)
+                        actual = most_recent - baseline
+                        if total_needed > 0 and actual >= expected * 0.75:
+                            on_pace = True
+
+                    if (recent_vs_baseline <= 0 or points_to_target > 0) and not on_pace:
                     if len(after_exams) >= 2:
                         first_after = after_exams.iloc[0]["score"]
                         trend = "📈 up" if most_recent > first_after else ("📉 down" if most_recent < first_after else "➡️ flat")
@@ -838,6 +848,11 @@ def render_app(config):
 
         # Color tag and notes — always last
         color_options = ["", "🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
+        matrix["Sess Gap"] = filtered_comp.apply(
+            lambda r: f"⚠️ {int(r['max_session_gap'])}d" if pd.notna(r.get("session_gap")) and bool(r.get("session_gap")) else (
+                f"✅ {int(r['max_session_gap'])}d" if pd.notna(r.get("max_session_gap")) else "—"
+            ), axis=1
+        )
         matrix["Tag"] = filtered_comp["color"]
         matrix["Notes"] = filtered_comp["note"]
 
