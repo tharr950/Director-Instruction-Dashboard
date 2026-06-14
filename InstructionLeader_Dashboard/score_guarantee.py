@@ -521,12 +521,24 @@ def render_app(config):
                         break
 
         # DEBUG: show what overrides were found
-        st.write("DEBUG notes columns:", list(st.session_state.sg_notes.columns) if not st.session_state.sg_notes.empty else "empty")
         # ── Build compliance checklist per student ─────────────────────────
         compliance_rows = []
         for _, row in sg.iterrows():
             sid = row["student_id"]
             checks = {}
+
+            # Check for 2+ week gaps in tutoring sessions
+            checks["session_gap"] = None
+            checks["max_session_gap"] = None
+            if not df_sg_sessions.empty and sid in df_sg_sessions["student_id"].values:
+                stu_sess_gap = df_sg_sessions[df_sg_sessions["student_id"] == sid].copy()
+                stu_sess_gap["starts_at"] = pd.to_datetime(stu_sess_gap["starts_at"], errors="coerce")
+                stu_sess_gap = stu_sess_gap.dropna(subset=["starts_at"]).sort_values("starts_at")
+                if len(stu_sess_gap) >= 2:
+                    gaps = stu_sess_gap["starts_at"].diff().dt.days.dropna()
+                    max_gap = int(gaps.max()) if len(gaps) > 0 else 0
+                    checks["max_session_gap"] = max_gap
+                    checks["session_gap"] = max_gap >= 14
 
             # 1. Package 20+ hours
             checks["1_pkg_20hrs"] = row["package_hours"] >= 20 if pd.notna(row["package_hours"]) else False
@@ -694,6 +706,7 @@ def render_app(config):
 | **Attend** | Student must attend all scheduled sessions — no cancellations or no-shows (shown as attended/total) |
 | **Tests** | Student must take a minimum of 4 practice tests during their program (excluding baseline) |
 | **Gaps ≥7d** | There must be at least 1 week (7 days) between each practice test (shows minimum gap) |
+| **Sess Gap** | Flags if there's a gap of 2+ weeks (14 days) between any tutoring sessions. ⚠️ = gap found, ✅ = no gaps |
 | **Final ≤14d** | Student must take the official exam within 14 days of their last tutoring session |
 | **Score** | Starting score → latest score (with change). Not a pass/fail check — shown for reference |
 | **Test** | SAT or ACT, auto-detected from baseline score |
@@ -973,6 +986,7 @@ def render_app(config):
                     ),
                     "Notes": st.column_config.TextColumn("Notes", width="large"),
                 },
+                num_rows="fixed",
                 key="sg_matrix_editor",
             )
 
@@ -1178,7 +1192,7 @@ def render_app(config):
                 if pd.notna(last_updated):
                     st.markdown(f"<p style='color:#94a3b8; font-size:0.75rem;'>Last updated: {last_updated}</p>", unsafe_allow_html=True)
 
-            note_input = st.text_area("Add or edit notes for this student:", value=existing_note, height=120, key=f"note_{sid}")
+            note_input = st.text_area("Add or edit notes for this student (use new lines for each entry):", value=existing_note, height=150, key=f"note_{sid}")
 
             if st.button("💾 Save Note", key=f"save_note_{sid}"):
                 now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
