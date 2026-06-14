@@ -284,7 +284,7 @@ def render_app(config):
             & (sg_alert_data["starting_score"].isna()
                | sg_alert_data["starting_test_taken"].isna()
                | (sg_alert_data["starting_test_taken"] > sg_alert_data["first_test_prep_session"]))
-        ].sort_values("student")
+        ].sort_values("first_test_prep_session", ascending=True, na_position="first")
 
         no_baseline_html = ""
         if len(no_baseline) > 0:
@@ -301,7 +301,11 @@ def render_app(config):
                     f"<tr><td style='padding:1px 0;'>Tutoring Since</td><td style='padding:1px 0; text-align:right; color:#991b1b; font-weight:600;'>{first_sess}</td></tr>"
                     f"</table></div>"
                 )
-            no_baseline_html = items
+            no_baseline_html = (
+                    "<p style='color:#64748b; font-size:0.78rem; margin-bottom:10px; font-style:italic;'>"
+                    "Students who have started tutoring but do not have a test score recorded before their first session. "
+                    "A baseline is required to measure improvement and determine the score guarantee target.</p>"
+                ) + items
 
         # Alert 2: Behind on exams
         behind_on_exams = []
@@ -346,7 +350,11 @@ def render_app(config):
                     f"<tr><td style='padding:1px 0;'>Hours</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{b['completed']:.0f}/{b['pkg_hrs']:.0f} hrs</td></tr>"
                     f"</table></div>"
                 )
-            behind_html = items
+            behind_html = (
+                    "<p style='color:#64748b; font-size:0.78rem; margin-bottom:10px; font-style:italic;'>"
+                    "Students who should have taken more practice tests based on hours completed. "
+                    "4 tests are required, spaced at 25%, 50%, 75%, and 100% of package hours.</p>"
+                ) + items
 
         # Alert 3: No score improvement
         score_concerns = []
@@ -419,7 +427,12 @@ def render_app(config):
                     f"<tr><td style='padding:1px 0;'>Exams / Trend</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{sc['num_exams']} exams {sc['trend']}</td></tr>"
                     f"</table></div>"
                 )
-            score_html = items
+            score_html = (
+                    "<p style='color:#64748b; font-size:0.78rem; margin-bottom:10px; font-style:italic;'>"
+                    "Students whose latest score has not improved over baseline or who are not on pace to meet their target. "
+                    "SAT: &lt;1350 needs +150, 1350+ needs 1500. ACT: &lt;29 needs +2, 29+ needs 31. "
+                    "Students making proportional progress are not flagged.</p>"
+                ) + items
 
         # Render alerts horizontally
         alert_configs = [
@@ -716,15 +729,14 @@ def render_app(config):
 | **Attend** | Student must attend all scheduled sessions — no cancellations or no-shows (shown as attended/total) |
 | **Tests** | Student must take a minimum of 4 practice tests during their program (excluding baseline) |
 | **Gaps ≥7d** | There must be at least 1 week (7 days) between each practice test (shows minimum gap) |
-| **Sess Gap** | Flags if there's a gap of 2+ weeks (14 days) between any tutoring sessions. ⚠️ = gap found, ✅ = no gaps |
-| **Sess Gap** | Flags if there is a gap of 2+ weeks (14 days) between any consecutive tutoring sessions. ⚠️ = gap found with max gap shown, ✅ = no gaps |
 | **Final ≤14d** | Student must take the official exam within 14 days of their last tutoring session |
 | **Score** | Starting score → latest score (with change). Not a pass/fail check — shown for reference |
-| **Test** | SAT or ACT, auto-detected from baseline score |
-| **Target** | SAT: below 1350 baseline needs +150 points; 1350+ needs to reach 1500. ACT: below 29 needs +2 points; 29+ needs to reach 31 |
+| **Test** | SAT or ACT, auto-detected from baseline score. Can be overridden in Edit Tags |
+| **Target** | SAT: below 1350 baseline needs +150 points; 1350+ needs to reach 1500. ACT: below 29 needs +2; 29+ needs 31 |
 | **To Target** | Whether the student's latest score meets or exceeds the target (✅ ahead / ❌ points needed) |
-| **Tag** | Custom color tag set by Jamie for tracking purposes |
-| **Notes** | Custom notes set by Jamie — persists across sessions |
+| **Sess Gap** | Flags if there is a gap of 2+ weeks (14 days) between any consecutive tutoring sessions |
+| **Tag** | Custom color tag for tracking purposes |
+| **Notes** | Custom notes — persists across sessions |
 """)
 
         # Filters
