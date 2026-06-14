@@ -377,3 +377,253 @@ Traceback (most recent call last):
         err.errno, msg=err.msg, sqlstate=err.sqlstate
     ) from err
 mysql.connector.errors.DatabaseError: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-08 06:00:02] Connecting to MySQL for Score Guarantee...
+[2026-06-08 06:00:32] Attempt 1/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-08 06:00:32] Retrying in 120 seconds...
+[2026-06-08 06:02:32] Connecting to MySQL for Score Guarantee...
+[2026-06-08 06:03:02] Attempt 2/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-08 06:03:02] Retrying in 120 seconds...
+[2026-06-08 06:05:02] Connecting to MySQL for Score Guarantee...
+[2026-06-08 06:05:33] Attempt 3/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-08 06:05:33] Retrying in 120 seconds...
+[2026-06-08 06:07:33] Connecting to MySQL for Score Guarantee...
+[2026-06-08 06:08:03] Attempt 4/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-08 06:08:03] Retrying in 120 seconds...
+[2026-06-08 06:10:03] Connecting to MySQL for Score Guarantee...
+[2026-06-08 06:10:33] Attempt 5/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-08 06:10:33] All 5 attempts failed.
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 354, in _open_connection
+    self._cmysql.connect(**cnx_kwargs)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+_mysql_connector.MySQLInterfaceError: Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 450, in <module>
+    run_with_retry(_run)
+    ~~~~~~~~~~~~~~^^^^^^
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 23, in run_with_retry
+    return func()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 443, in _run
+    df = fetch_score_guarantee()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 211, in fetch_score_guarantee
+    conn = mysql.connector.connect(
+        host=RP_HOST,
+    ...<5 lines>...
+        auth_plugin="mysql_native_password",
+    )
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/pooling.py", line 322, in connect
+    return CMySQLConnection(*args, **kwargs)
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 142, in __init__
+    self.connect(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/abstracts.py", line 1604, in connect
+    self._open_connection()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 360, in _open_connection
+    raise get_mysql_exception(
+        err.errno, msg=err.msg, sqlstate=err.sqlstate
+    ) from err
+mysql.connector.errors.DatabaseError: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-09 06:00:01] Connecting to MySQL for Score Guarantee...
+[2026-06-09 06:00:31] Attempt 1/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-09 06:00:31] Retrying in 120 seconds...
+[2026-06-09 06:02:31] Connecting to MySQL for Score Guarantee...
+[2026-06-09 06:03:02] Attempt 2/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-09 06:03:02] Retrying in 120 seconds...
+[2026-06-09 06:05:02] Connecting to MySQL for Score Guarantee...
+[2026-06-09 06:05:32] Attempt 3/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-09 06:05:32] Retrying in 120 seconds...
+[2026-06-09 06:07:32] Connecting to MySQL for Score Guarantee...
+[2026-06-09 06:08:02] Attempt 4/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-09 06:08:02] Retrying in 120 seconds...
+[2026-06-09 06:10:02] Connecting to MySQL for Score Guarantee...
+[2026-06-09 06:10:32] Attempt 5/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-09 06:10:32] All 5 attempts failed.
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 354, in _open_connection
+    self._cmysql.connect(**cnx_kwargs)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+_mysql_connector.MySQLInterfaceError: Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 450, in <module>
+    run_with_retry(_run)
+    ~~~~~~~~~~~~~~^^^^^^
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 23, in run_with_retry
+    return func()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 443, in _run
+    df = fetch_score_guarantee()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 211, in fetch_score_guarantee
+    conn = mysql.connector.connect(
+        host=RP_HOST,
+    ...<5 lines>...
+        auth_plugin="mysql_native_password",
+    )
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/pooling.py", line 322, in connect
+    return CMySQLConnection(*args, **kwargs)
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 142, in __init__
+    self.connect(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/abstracts.py", line 1604, in connect
+    self._open_connection()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 360, in _open_connection
+    raise get_mysql_exception(
+        err.errno, msg=err.msg, sqlstate=err.sqlstate
+    ) from err
+mysql.connector.errors.DatabaseError: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-11 06:00:02] Connecting to MySQL for Score Guarantee...
+[2026-06-11 06:00:32] Attempt 1/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-11 06:00:32] Retrying in 120 seconds...
+[2026-06-11 06:02:32] Connecting to MySQL for Score Guarantee...
+[2026-06-11 06:03:03] Attempt 2/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-11 06:03:03] Retrying in 120 seconds...
+[2026-06-11 06:05:03] Connecting to MySQL for Score Guarantee...
+[2026-06-11 06:05:33] Attempt 3/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-11 06:05:33] Retrying in 120 seconds...
+[2026-06-11 06:07:33] Connecting to MySQL for Score Guarantee...
+[2026-06-11 06:08:03] Attempt 4/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-11 06:08:03] Retrying in 120 seconds...
+[2026-06-11 06:10:03] Connecting to MySQL for Score Guarantee...
+[2026-06-11 06:10:33] Attempt 5/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-11 06:10:33] All 5 attempts failed.
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 354, in _open_connection
+    self._cmysql.connect(**cnx_kwargs)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+_mysql_connector.MySQLInterfaceError: Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 450, in <module>
+    run_with_retry(_run)
+    ~~~~~~~~~~~~~~^^^^^^
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 23, in run_with_retry
+    return func()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 443, in _run
+    df = fetch_score_guarantee()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 211, in fetch_score_guarantee
+    conn = mysql.connector.connect(
+        host=RP_HOST,
+    ...<5 lines>...
+        auth_plugin="mysql_native_password",
+    )
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/pooling.py", line 322, in connect
+    return CMySQLConnection(*args, **kwargs)
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 142, in __init__
+    self.connect(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/abstracts.py", line 1604, in connect
+    self._open_connection()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 360, in _open_connection
+    raise get_mysql_exception(
+        err.errno, msg=err.msg, sqlstate=err.sqlstate
+    ) from err
+mysql.connector.errors.DatabaseError: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-13 06:00:01] Connecting to MySQL for Score Guarantee...
+[2026-06-13 06:00:01] Attempt 1/5 failed: 2005 (HY000): Unknown MySQL server host 'replica.revolutionprep.com' (8)
+[2026-06-13 06:00:01] Retrying in 120 seconds...
+[2026-06-13 06:02:02] Connecting to MySQL for Score Guarantee...
+[2026-06-13 06:02:02] Attempt 2/5 failed: 2005 (HY000): Unknown MySQL server host 'replica.revolutionprep.com' (8)
+[2026-06-13 06:02:02] Retrying in 120 seconds...
+[2026-06-13 06:04:02] Connecting to MySQL for Score Guarantee...
+[2026-06-13 06:04:02] Attempt 3/5 failed: 2005 (HY000): Unknown MySQL server host 'replica.revolutionprep.com' (8)
+[2026-06-13 06:04:02] Retrying in 120 seconds...
+[2026-06-13 06:06:02] Connecting to MySQL for Score Guarantee...
+[2026-06-13 06:06:02] Attempt 4/5 failed: 2005 (HY000): Unknown MySQL server host 'replica.revolutionprep.com' (8)
+[2026-06-13 06:06:02] Retrying in 120 seconds...
+[2026-06-13 06:08:02] Connecting to MySQL for Score Guarantee...
+[2026-06-13 06:08:02] Attempt 5/5 failed: 2005 (HY000): Unknown MySQL server host 'replica.revolutionprep.com' (8)
+[2026-06-13 06:08:02] All 5 attempts failed.
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 354, in _open_connection
+    self._cmysql.connect(**cnx_kwargs)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+_mysql_connector.MySQLInterfaceError: Unknown MySQL server host 'replica.revolutionprep.com' (8)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 450, in <module>
+    run_with_retry(_run)
+    ~~~~~~~~~~~~~~^^^^^^
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 23, in run_with_retry
+    return func()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 443, in _run
+    df = fetch_score_guarantee()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 211, in fetch_score_guarantee
+    conn = mysql.connector.connect(
+        host=RP_HOST,
+    ...<5 lines>...
+        auth_plugin="mysql_native_password",
+    )
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/pooling.py", line 322, in connect
+    return CMySQLConnection(*args, **kwargs)
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 142, in __init__
+    self.connect(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/abstracts.py", line 1604, in connect
+    self._open_connection()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 360, in _open_connection
+    raise get_mysql_exception(
+        err.errno, msg=err.msg, sqlstate=err.sqlstate
+    ) from err
+mysql.connector.errors.DatabaseError: 2005 (HY000): Unknown MySQL server host 'replica.revolutionprep.com' (8)
+[2026-06-14 06:00:02] Connecting to MySQL for Score Guarantee...
+[2026-06-14 06:00:32] Attempt 1/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-14 06:00:32] Retrying in 120 seconds...
+[2026-06-14 06:02:32] Connecting to MySQL for Score Guarantee...
+[2026-06-14 06:03:03] Attempt 2/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-14 06:03:03] Retrying in 120 seconds...
+[2026-06-14 06:05:03] Connecting to MySQL for Score Guarantee...
+[2026-06-14 06:05:33] Attempt 3/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-14 06:05:33] Retrying in 120 seconds...
+[2026-06-14 06:07:33] Connecting to MySQL for Score Guarantee...
+[2026-06-14 06:08:03] Attempt 4/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-14 06:08:03] Retrying in 120 seconds...
+[2026-06-14 06:10:03] Connecting to MySQL for Score Guarantee...
+[2026-06-14 06:10:33] Attempt 5/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-06-14 06:10:33] All 5 attempts failed.
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 354, in _open_connection
+    self._cmysql.connect(**cnx_kwargs)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+_mysql_connector.MySQLInterfaceError: Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 450, in <module>
+    run_with_retry(_run)
+    ~~~~~~~~~~~~~~^^^^^^
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 23, in run_with_retry
+    return func()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 443, in _run
+    df = fetch_score_guarantee()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 211, in fetch_score_guarantee
+    conn = mysql.connector.connect(
+        host=RP_HOST,
+    ...<5 lines>...
+        auth_plugin="mysql_native_password",
+    )
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/pooling.py", line 322, in connect
+    return CMySQLConnection(*args, **kwargs)
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 142, in __init__
+    self.connect(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/abstracts.py", line 1604, in connect
+    self._open_connection()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 360, in _open_connection
+    raise get_mysql_exception(
+        err.errno, msg=err.msg, sqlstate=err.sqlstate
+    ) from err
+mysql.connector.errors.DatabaseError: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)

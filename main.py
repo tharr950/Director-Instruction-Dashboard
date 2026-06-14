@@ -9,6 +9,7 @@ st.set_page_config(page_title="Instruction Leader Dashboard", layout="wide")
 # --- Mapping of IL -> secrets file ---
 IL_CONFIGS = {
     "Jamie": "configs/jamie_secrets.toml",
+    "Score Guarantee": "configs/score_guarantee_secrets.toml",
 }
 
 # --- Load universal config ---
@@ -25,7 +26,7 @@ if "il_choice" not in st.session_state:
 if not st.session_state["authenticated"]:
     with st.sidebar.form("login_form"):
         il_input = st.selectbox(
-            "Select Instruction Leader:",
+            "Select Dashboard:",
             list(IL_CONFIGS.keys()),
             index=0
         )
@@ -59,6 +60,7 @@ if st.session_state["authenticated"]:
 # --- Dashboard content ---
 if st.session_state["authenticated"] and st.session_state["il_choice"]:
     st.success(f"Authenticated! Loading {st.session_state['il_choice']} dashboard...")
-    module_name = f"InstructionLeader_Dashboard.{st.session_state['il_choice'].lower()}"
+    choice = st.session_state["il_choice"]
+    module_name = f"InstructionLeader_Dashboard.{choice.lower().replace(' ', '_')}"
     dashboard_module = importlib.import_module(module_name)
     dashboard_module.render_app(config)
