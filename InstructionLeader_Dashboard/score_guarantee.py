@@ -677,13 +677,16 @@ def render_app(config):
         notes_merged = st.session_state.sg_notes.copy() if not st.session_state.sg_notes.empty else pd.DataFrame(columns=["student_id", "note", "color"])
         if "color" not in notes_merged.columns:
             notes_merged["color"] = ""
-        merge_cols = ["student_id", "note", "color"]
+        if "test_type_override" not in notes_merged.columns:
+            notes_merged["test_type_override"] = ""
+        merge_cols = ["student_id", "note", "color", "test_type_override"]
         # Ensure student_id types match for merge
         notes_merged["student_id"] = pd.to_numeric(notes_merged["student_id"], errors="coerce")
         filtered_comp["student_id"] = pd.to_numeric(filtered_comp["student_id"], errors="coerce")
         filtered_comp = filtered_comp.merge(notes_merged[merge_cols], on="student_id", how="left")
         filtered_comp["note"] = filtered_comp["note"].fillna("")
         filtered_comp["color"] = filtered_comp["color"].fillna("")
+        filtered_comp["test_type_override"] = filtered_comp["test_type_override"].fillna("")
 
         # Color tag filter
         active_tags = [c for c in filtered_comp["color"].unique() if c and str(c).strip()]

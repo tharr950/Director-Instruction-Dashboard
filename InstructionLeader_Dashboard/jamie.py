@@ -1652,6 +1652,14 @@ def render_app(config):
             sg.drop(columns=["_tutor_match"], inplace=True)
 
             # Score improvement targets (SAT: 400-1600 range, ACT: 1-36 range)
+            def calc_target_with_type(score, test_type):
+                if pd.isna(score):
+                    return np.nan
+                if test_type == "SAT":
+                    return score + 150 if score < 1350 else 1500
+                else:  # ACT
+                    return score + 2 if score < 29 else 31
+
             def calc_target(score):
                 if pd.isna(score):
                     return np.nan
@@ -1671,6 +1679,46 @@ def render_app(config):
             for _, row in sg.iterrows():
                 sid = row["student_id"]
                 checks = {}
+
+                # Check for test type override
+                override = row.get("test_type_override", "")
+                if override and override in ["SAT", "ACT"] and not df_sg_exams.empty and sid in df_sg_exams["student_id"].values:
+                    stu_all_exams = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
+                    stu_all_exams["exam_date"] = pd.to_datetime(stu_all_exams["exam_date"], errors="coerce")
+                    stu_all_exams["score"] = pd.to_numeric(stu_all_exams["score"], errors="coerce")
+
+                    # Filter to the overridden test type
+                    if override == "SAT":
+                        type_exams = stu_all_exams[stu_all_exams["exam_type"].isin(["SAT", "Digital SAT"])]
+                    else:
+                        type_exams = stu_all_exams[stu_all_exams["exam_type"].isin(["ACT", "Digital ACT"])]
+
+                    type_exams = type_exams.dropna(subset=["score"])
+
+                    # Recalculate baseline (most recent "before" exam of this type)
+                    before = type_exams[type_exams["before_or_after_tutoring"] == "before"].sort_values("exam_date", ascending=False)
+                    after = type_exams[type_exams["before_or_after_tutoring"] == "after"].sort_values("exam_date", ascending=False)
+
+                    if len(before) > 0:
+                        row = row.copy()
+                        row["starting_score"] = before.iloc[0]["score"]
+                        row["starting_test_taken"] = before.iloc[0]["exam_date"]
+                    if len(after) > 0:
+                        row = row.copy()
+                        row["latest_test_score"] = after.iloc[0]["score"]
+                        row["last_test_taken"] = after.iloc[0]["exam_date"]
+                    else:
+                        row = row.copy()
+                        row["latest_test_score"] = np.nan
+                        row["last_test_taken"] = pd.NaT
+
+                    # Recalculate derived fields
+                    row["score_change"] = row["latest_test_score"] - row["starting_score"] if pd.notna(row["latest_test_score"]) and pd.notna(row["starting_score"]) else np.nan
+                    row["test_type"] = override
+                    if pd.notna(row["starting_score"]):
+                        row["target_score"] = calc_target_with_type(row["starting_score"], override)
+                        row["points_to_target"] = row["target_score"] - row["latest_test_score"] if pd.notna(row["latest_test_score"]) else np.nan
+                        row["on_track"] = row["latest_test_score"] >= row["target_score"] if pd.notna(row["latest_test_score"]) else None
 
                 # 1. Package 20+ hours
                 checks["1_pkg_20hrs"] = row["package_hours"] >= 20 if pd.notna(row["package_hours"]) else False
@@ -1789,6 +1837,7 @@ def render_app(config):
                 checks["tutor"] = row.get("tutor", "")
                 checks["advisor"] = row.get("advisor", "")
                 checks["faculty_leader"] = row.get("faculty_leader", "")
+                checks["test_type_override"] = row.get("test_type_override", "")
                 checks["package_hours"] = row.get("package_hours")
                 checks["completed_hours"] = row.get("completed_test_prep_hours")
                 checks["starting_score"] = row.get("starting_score")
@@ -1883,13 +1932,16 @@ def render_app(config):
             notes_merged = st.session_state.sg_notes.copy() if not st.session_state.sg_notes.empty else pd.DataFrame(columns=["student_id", "note", "color"])
             if "color" not in notes_merged.columns:
                 notes_merged["color"] = ""
-            merge_cols = ["student_id", "note", "color"]
+            if "test_type_override" not in notes_merged.columns:
+                notes_merged["test_type_override"] = ""
+            merge_cols = ["student_id", "note", "color", "test_type_override"]
             # Ensure student_id types match for merge
             notes_merged["student_id"] = pd.to_numeric(notes_merged["student_id"], errors="coerce")
             filtered_comp["student_id"] = pd.to_numeric(filtered_comp["student_id"], errors="coerce")
             filtered_comp = filtered_comp.merge(notes_merged[merge_cols], on="student_id", how="left")
             filtered_comp["note"] = filtered_comp["note"].fillna("")
             filtered_comp["color"] = filtered_comp["color"].fillna("")
+            filtered_comp["test_type_override"] = filtered_comp["test_type_override"].fillna("")
 
             # Color tag filter
             active_tags = [c for c in filtered_comp["color"].unique() if c and str(c).strip()]
@@ -2074,6 +2126,10 @@ def render_app(config):
                 labeled_to_tag = {v: k for k, v in tag_to_labeled.items()}
 
                 edit_df = matrix[["Student", "Tag", "Notes"]].copy()
+                edit_df["Test Type"] = filtered_comp["test_type_override"].apply(
+                    lambda x: x if x in ["SAT", "ACT"] else "Auto"
+                )
+                edit_df = edit_df[["Student", "Test Type", "Tag", "Notes"]]
                 edit_df["Tag"] = edit_df["Tag"].apply(lambda x: tag_to_labeled.get(str(x).strip(), x) if x else "")
 
                 edited_matrix_raw = st.data_editor(
@@ -2084,6 +2140,11 @@ def render_app(config):
                     disabled=["Student"],
                     column_config={
                         "Student": st.column_config.TextColumn("Student", width=180),
+                        "Test Type": st.column_config.SelectboxColumn(
+                            "Test Type",
+                            options=["Auto", "SAT", "ACT"],
+                            width=80,
+                        ),
                         "Tag": st.column_config.SelectboxColumn(
                             "Tag",
                             options=labeled_options,
@@ -2151,19 +2212,26 @@ def render_app(config):
                     new_note = str(edited_matrix.iloc[i].get("Notes", "") or "")
                     new_color_raw = str(edited_matrix.iloc[i].get("Tag", "") or "")
                     new_color = new_color_raw.split(" ")[0].strip() if new_color_raw else ""
+                    new_test_type = str(edited_matrix.iloc[i].get("Test Type", "") or "")
+                    if new_test_type == "Auto":
+                        new_test_type = ""
                     old_note = str(filtered_comp.iloc[i].get("note", "") or "")
                     old_color = str(filtered_comp.iloc[i].get("color", "") or "")
+                    old_test_type = str(filtered_comp.iloc[i].get("test_type_override", "") or "")
 
-                    if new_note != old_note or new_color != old_color:
+                    if new_note != old_note or new_color != old_color or new_test_type != old_test_type:
                         sid = str(student_ids_ordered[i])
                         now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
                         mask = notes_df["student_id"] == sid
+                        if "test_type_override" not in notes_df.columns:
+                            notes_df["test_type_override"] = ""
                         if mask.any():
                             notes_df.loc[mask, "note"] = new_note
                             notes_df.loc[mask, "color"] = new_color
+                            notes_df.loc[mask, "test_type_override"] = new_test_type
                             notes_df.loc[mask, "updated_at"] = now_str
                         else:
-                            new_row = pd.DataFrame([{"student_id": sid, "note": new_note, "color": new_color, "updated_at": now_str}])
+                            new_row = pd.DataFrame([{"student_id": sid, "note": new_note, "color": new_color, "test_type_override": new_test_type, "updated_at": now_str}])
                             notes_df = pd.concat([notes_df, new_row], ignore_index=True)
                         changed = True
                 if changed:
