@@ -469,6 +469,13 @@ def render_app(config):
         sg["on_track"] = sg["latest_test_score"] >= sg["target_score"]
 
         # ── Apply test type overrides directly to sg ──────────────────────
+        # Convert columns to object type so we can assign mixed types
+        for col in ["on_track", "test_type", "starting_score", "latest_test_score",
+                     "score_change", "target_score", "points_to_target",
+                     "starting_test_taken", "last_test_taken"]:
+            if col in sg.columns:
+                sg[col] = sg[col].astype(object)
+
         if not st.session_state.sg_notes.empty and "test_type_override" in st.session_state.sg_notes.columns:
             for _, nr in st.session_state.sg_notes.iterrows():
                 ov = str(nr.get("test_type_override", "") or "")
