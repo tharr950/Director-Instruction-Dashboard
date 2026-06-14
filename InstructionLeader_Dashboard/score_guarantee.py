@@ -753,6 +753,17 @@ def render_app(config):
             filtered_comp["test_type_override"] = ""
         filtered_comp["test_type_override"] = filtered_comp["test_type_override"].fillna("")
 
+        # Hide students tagged as "Not Score Guarantee" or "Completed"
+        legend = st.session_state.sg_legend
+        hide_tags = set()
+        for emoji, label in legend.items():
+            if str(label).strip().lower() in ["not score guarantee", "completed"]:
+                hide_tags.add(emoji)
+
+        show_hidden = st.checkbox("Show hidden students (Not Score Guarantee / Completed)", value=False, key="sg_show_hidden")
+        if not show_hidden and hide_tags:
+            filtered_comp = filtered_comp[~filtered_comp["color"].isin(hide_tags)]
+
         # Color tag filter
         active_tags = [c for c in filtered_comp["color"].unique() if c and str(c).strip()]
         if active_tags:
