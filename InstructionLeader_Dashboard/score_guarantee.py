@@ -1093,6 +1093,46 @@ def render_app(config):
                     st.session_state.sg_notes = notes_df
                     st.rerun()
 
+        # ── Quick Notes Editor ─────────────────────────────────────────────
+        with st.expander("📝 Edit Notes (multiline)", expanded=False):
+            qn_students = sorted(sg["student"].dropna().unique())
+            qn_selected = st.selectbox("Select student:", qn_students, key="qn_student_select")
+            if qn_selected:
+                qn_row = sg[sg["student"] == qn_selected].iloc[0]
+                qn_sid = qn_row["student_id"]
+                qn_existing = ""
+                qn_notes_df = st.session_state.sg_notes
+                if not qn_notes_df.empty and str(qn_sid).split(".")[0] in qn_notes_df["student_id"].astype(str).str.split(".").str[0].values:
+                    mask = qn_notes_df["student_id"].astype(str).str.split(".").str[0] == str(qn_sid).split(".")[0]
+                    qn_existing = str(qn_notes_df.loc[mask, "note"].iloc[0])
+                    if qn_existing == "nan":
+                        qn_existing = ""
+                    qn_updated = qn_notes_df.loc[mask, "updated_at"].iloc[0]
+                    if pd.notna(qn_updated) and str(qn_updated) != "nan":
+                        st.markdown(f"<p style='color:#94a3b8; font-size:0.75rem;'>Last updated: {qn_updated}</p>", unsafe_allow_html=True)
+
+                qn_input = st.text_area("Notes:", value=qn_existing, height=150, key=f"qn_note_{qn_sid}")
+                if st.button("💾 Save Note", key=f"qn_save_{qn_sid}"):
+                    now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+                    notes_df = st.session_state.sg_notes.copy()
+                    for col in ["note", "color", "updated_at"]:
+                        if col in notes_df.columns:
+                            notes_df[col] = notes_df[col].astype(str).replace("nan", "")
+                    if "test_type_override" in notes_df.columns:
+                        notes_df["test_type_override"] = notes_df["test_type_override"].astype(str).replace("nan", "")
+                    notes_df["student_id"] = notes_df["student_id"].astype(str)
+                    sid_str = str(qn_sid).split(".")[0]
+                    mask = notes_df["student_id"].str.split(".").str[0] == sid_str
+                    if mask.any():
+                        notes_df.loc[mask, "note"] = qn_input
+                        notes_df.loc[mask, "updated_at"] = now_str
+                    else:
+                        new_row = pd.DataFrame([{"student_id": sid_str, "note": qn_input, "color": "", "test_type_override": "", "updated_at": now_str}])
+                        notes_df = pd.concat([notes_df, new_row], ignore_index=True)
+                    if save_sg_notes(notes_df):
+                        st.session_state.sg_notes = notes_df
+                        st.rerun()
+
         # ── Student Detail Drilldown ──────────────────────────────────────
         st.markdown("")
         st.markdown(
