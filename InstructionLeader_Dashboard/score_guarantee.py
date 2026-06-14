@@ -725,6 +725,8 @@ def render_app(config):
         filtered_comp = filtered_comp.merge(notes_merged[merge_cols], on="student_id", how="left")
         filtered_comp["note"] = filtered_comp["note"].fillna("")
         filtered_comp["color"] = filtered_comp["color"].fillna("")
+        if "test_type_override" not in filtered_comp.columns:
+            filtered_comp["test_type_override"] = ""
         filtered_comp["test_type_override"] = filtered_comp["test_type_override"].fillna("")
 
         # Color tag filter
