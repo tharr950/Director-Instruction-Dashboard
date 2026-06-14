@@ -512,12 +512,6 @@ def render_app(config):
 
         # DEBUG: show what overrides were found
         st.write("DEBUG notes columns:", list(st.session_state.sg_notes.columns) if not st.session_state.sg_notes.empty else "empty")
-        if not st.session_state.sg_notes.empty and "test_type_override" in st.session_state.sg_notes.columns:
-            overrides_found = st.session_state.sg_notes[st.session_state.sg_notes["test_type_override"].isin(["SAT", "ACT"])]
-            st.write("DEBUG overrides found:", len(overrides_found))
-            if len(overrides_found) > 0:
-                st.write(overrides_found[["student_id", "test_type_override"]].to_dict())
-
         # ── Build compliance checklist per student ─────────────────────────
         compliance_rows = []
         for _, row in sg.iterrows():
@@ -1014,23 +1008,34 @@ def render_app(config):
                     notes_df[col] = notes_df[col].astype(str).replace("nan", "")
             notes_df["student_id"] = notes_df["student_id"].astype(str)
 
+            if "test_type_override" not in notes_df.columns:
+                notes_df["test_type_override"] = ""
+            for col in ["test_type_override"]:
+                if col in notes_df.columns:
+                    notes_df[col] = notes_df[col].astype(str).replace("nan", "")
+
             for i in range(len(edited_matrix)):
                 new_note = str(edited_matrix.iloc[i].get("Notes", "") or "")
                 new_color_raw = str(edited_matrix.iloc[i].get("Tag", "") or "")
                 new_color = new_color_raw.split(" ")[0].strip() if new_color_raw else ""
+                new_test_type = str(edited_matrix.iloc[i].get("Test Type", "") or "")
+                if new_test_type == "Auto":
+                    new_test_type = ""
                 old_note = str(filtered_comp.iloc[i].get("note", "") or "")
                 old_color = str(filtered_comp.iloc[i].get("color", "") or "")
+                old_test_type = str(filtered_comp.iloc[i].get("test_type_override", "") or "")
 
-                if new_note != old_note or new_color != old_color:
+                if new_note != old_note or new_color != old_color or new_test_type != old_test_type:
                     sid = str(student_ids_ordered[i])
                     now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
                     mask = notes_df["student_id"] == sid
                     if mask.any():
                         notes_df.loc[mask, "note"] = new_note
                         notes_df.loc[mask, "color"] = new_color
+                        notes_df.loc[mask, "test_type_override"] = new_test_type
                         notes_df.loc[mask, "updated_at"] = now_str
                     else:
-                        new_row = pd.DataFrame([{"student_id": sid, "note": new_note, "color": new_color, "updated_at": now_str}])
+                        new_row = pd.DataFrame([{"student_id": sid, "note": new_note, "color": new_color, "test_type_override": new_test_type, "updated_at": now_str}])
                         notes_df = pd.concat([notes_df, new_row], ignore_index=True)
                     changed = True
             if changed:
