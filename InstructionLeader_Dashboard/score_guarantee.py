@@ -446,6 +446,14 @@ def render_app(config):
         sg.drop(columns=["_tutor_match"], inplace=True)
 
         # Score improvement targets (SAT: 400-1600 range, ACT: 1-36 range)
+        def calc_target_with_type(score, test_type):
+            if pd.isna(score):
+                return np.nan
+            if test_type == "SAT":
+                return score + 150 if score < 1350 else 1500
+            else:
+                return score + 2 if score < 29 else 31
+
         def calc_target(score):
             if pd.isna(score):
                 return np.nan
@@ -465,6 +473,36 @@ def render_app(config):
         for _, row in sg.iterrows():
             sid = row["student_id"]
             checks = {}
+
+            # Check for test type override
+            override = row.get("test_type_override", "")
+            if override and override in ["SAT", "ACT"] and not df_sg_exams.empty and sid in df_sg_exams["student_id"].values:
+                stu_all_exams = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
+                stu_all_exams["exam_date"] = pd.to_datetime(stu_all_exams["exam_date"], errors="coerce")
+                stu_all_exams["score"] = pd.to_numeric(stu_all_exams["score"], errors="coerce")
+                if override == "SAT":
+                    type_exams = stu_all_exams[stu_all_exams["exam_type"].isin(["SAT", "Digital SAT"])]
+                else:
+                    type_exams = stu_all_exams[stu_all_exams["exam_type"].isin(["ACT", "Digital ACT"])]
+                type_exams = type_exams.dropna(subset=["score"])
+                before = type_exams[type_exams["before_or_after_tutoring"] == "before"].sort_values("exam_date", ascending=False)
+                after = type_exams[type_exams["before_or_after_tutoring"] == "after"].sort_values("exam_date", ascending=False)
+                row = row.copy()
+                if len(before) > 0:
+                    row["starting_score"] = before.iloc[0]["score"]
+                    row["starting_test_taken"] = before.iloc[0]["exam_date"]
+                if len(after) > 0:
+                    row["latest_test_score"] = after.iloc[0]["score"]
+                    row["last_test_taken"] = after.iloc[0]["exam_date"]
+                else:
+                    row["latest_test_score"] = np.nan
+                    row["last_test_taken"] = pd.NaT
+                row["score_change"] = row["latest_test_score"] - row["starting_score"] if pd.notna(row["latest_test_score"]) and pd.notna(row["starting_score"]) else np.nan
+                row["test_type"] = override
+                if pd.notna(row["starting_score"]):
+                    row["target_score"] = calc_target_with_type(row["starting_score"], override)
+                    row["points_to_target"] = row["target_score"] - row["latest_test_score"] if pd.notna(row["latest_test_score"]) else np.nan
+                    row["on_track"] = row["latest_test_score"] >= row["target_score"] if pd.notna(row["latest_test_score"]) else None
 
             # 1. Package 20+ hours
             checks["1_pkg_20hrs"] = row["package_hours"] >= 20 if pd.notna(row["package_hours"]) else False
@@ -583,6 +621,7 @@ def render_app(config):
             checks["tutor"] = row.get("tutor", "")
             checks["advisor"] = row.get("advisor", "")
             checks["faculty_leader"] = row.get("faculty_leader", "")
+            checks["test_type_override"] = row.get("test_type_override", "")
             checks["package_hours"] = row.get("package_hours")
             checks["completed_hours"] = row.get("completed_test_prep_hours")
             checks["starting_score"] = row.get("starting_score")
@@ -871,6 +910,10 @@ def render_app(config):
             labeled_to_tag = {v: k for k, v in tag_to_labeled.items()}
 
             edit_df = matrix[["Student", "Tag", "Notes"]].copy()
+            edit_df["Test Type"] = filtered_comp["test_type_override"].apply(
+                lambda x: x if x in ["SAT", "ACT"] else "Auto"
+            )
+            edit_df = edit_df[["Student", "Test Type", "Tag", "Notes"]]
             edit_df["Tag"] = edit_df["Tag"].apply(lambda x: tag_to_labeled.get(str(x).strip(), x) if x else "")
 
             edited_matrix_raw = st.data_editor(
@@ -881,6 +924,11 @@ def render_app(config):
                 disabled=["Student"],
                 column_config={
                     "Student": st.column_config.TextColumn("Student", width=180),
+                    "Test Type": st.column_config.SelectboxColumn(
+                        "Test Type",
+                        options=["Auto", "SAT", "ACT"],
+                        width=80,
+                    ),
                     "Tag": st.column_config.SelectboxColumn(
                         "Tag",
                         options=labeled_options,
