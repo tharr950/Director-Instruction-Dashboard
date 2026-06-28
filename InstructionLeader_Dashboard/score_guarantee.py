@@ -496,6 +496,41 @@ def render_app(config):
         sg["on_track"] = sg["latest_test_score"] >= sg["target_score"]
 
         # ── Apply test type overrides directly to sg ──────────────────────
+        # ── Re-derive scores per student based on test_type ─────────────
+        if not df_sg_exams.empty:
+            for sg_idx in sg.index:
+                sid = sg.at[sg_idx, "student_id"]
+                tt = sg.at[sg_idx, "test_type"]
+                if tt not in ["SAT", "ACT"]:
+                    continue
+                stu_exams = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
+                if stu_exams.empty:
+                    continue
+                stu_exams["exam_date"] = pd.to_datetime(stu_exams["exam_date"], errors="coerce")
+                stu_exams["score"] = pd.to_numeric(stu_exams["score"], errors="coerce")
+                if tt == "SAT":
+                    typed = stu_exams[stu_exams["exam_type"].isin(["SAT", "Digital SAT"])]
+                else:
+                    typed = stu_exams[stu_exams["exam_type"].isin(["ACT", "Digital ACT"])]
+                typed = typed.dropna(subset=["score"])
+                before = typed[typed["before_or_after_tutoring"] == "before"].sort_values("exam_date", ascending=False)
+                after = typed[typed["before_or_after_tutoring"] == "after"].sort_values("exam_date", ascending=False)
+                if len(before) > 0:
+                    sg.at[sg_idx, "starting_score"] = float(before.iloc[0]["score"])
+                    sg.at[sg_idx, "starting_test_taken"] = before.iloc[0]["exam_date"]
+                if len(after) > 0:
+                    sg.at[sg_idx, "latest_test_score"] = float(after.iloc[0]["score"])
+                    sg.at[sg_idx, "last_test_taken"] = after.iloc[0]["exam_date"]
+                else:
+                    sg.at[sg_idx, "latest_test_score"] = np.nan
+                    sg.at[sg_idx, "last_test_taken"] = pd.NaT
+                s = sg.at[sg_idx, "starting_score"]
+                l = sg.at[sg_idx, "latest_test_score"]
+                sg.at[sg_idx, "score_change"] = float(l - s) if pd.notna(l) and pd.notna(s) else np.nan
+                sg.at[sg_idx, "target_score"] = float(calc_target_with_type(s, tt)) if pd.notna(s) else np.nan
+                t = sg.at[sg_idx, "target_score"]
+                sg.at[sg_idx, "points_to_target"] = float(t - l) if pd.notna(l) and pd.notna(t) else np.nan
+
         # Convert columns to object type so we can assign mixed types
         for col in ["on_track", "test_type", "starting_score", "latest_test_score",
                      "score_change", "target_score", "points_to_target",
@@ -566,36 +601,6 @@ def render_app(config):
                     max_gap = int(gaps.max()) if len(gaps) > 0 else 0
                     checks["max_session_gap"] = max_gap
                     checks["session_gap"] = max_gap >= 14
-
-            # Auto-detect test type filtering (when no override, but type was auto-detected)
-            detected_type = row.get("test_type", "")
-            override = override_lookup.get(str(sid).split(".")[0], "") if "override_lookup" in dir() else ""
-            if not override and detected_type in ["SAT", "ACT"] and not df_sg_exams.empty and sid in df_sg_exams["student_id"].values:
-                stu_all = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
-                stu_all["exam_date"] = pd.to_datetime(stu_all["exam_date"], errors="coerce")
-                stu_all["score"] = pd.to_numeric(stu_all["score"], errors="coerce")
-                if detected_type == "SAT":
-                    typed = stu_all[stu_all["exam_type"].isin(["SAT", "Digital SAT"])]
-                else:
-                    typed = stu_all[stu_all["exam_type"].isin(["ACT", "Digital ACT"])]
-                typed = typed.dropna(subset=["score"])
-                before = typed[typed["before_or_after_tutoring"] == "before"].sort_values("exam_date", ascending=False)
-                after = typed[typed["before_or_after_tutoring"] == "after"].sort_values("exam_date", ascending=False)
-                row = row.copy()
-                if len(before) > 0:
-                    row["starting_score"] = float(before.iloc[0]["score"])
-                    row["starting_test_taken"] = before.iloc[0]["exam_date"]
-                if len(after) > 0:
-                    row["latest_test_score"] = float(after.iloc[0]["score"])
-                    row["last_test_taken"] = after.iloc[0]["exam_date"]
-                else:
-                    row["latest_test_score"] = np.nan
-                    row["last_test_taken"] = pd.NaT
-                row["score_change"] = row["latest_test_score"] - row["starting_score"] if pd.notna(row["latest_test_score"]) and pd.notna(row["starting_score"]) else np.nan
-                if pd.notna(row["starting_score"]):
-                    row["target_score"] = calc_target_with_type(row["starting_score"], detected_type)
-                    row["points_to_target"] = row["target_score"] - row["latest_test_score"] if pd.notna(row["latest_test_score"]) else np.nan
-                    row["on_track"] = bool(row["latest_test_score"] >= row["target_score"]) if pd.notna(row["latest_test_score"]) else None
 
             # 1. Package 20+ hours
             checks["1_pkg_20hrs"] = row["package_hours"] >= 20 if pd.notna(row["package_hours"]) else False
