@@ -203,6 +203,10 @@ def render_app(config):
         df_sg = load_score_guarantee()
         df_sg_sessions = load_sg_sessions()
         df_sg_exams = load_sg_exams()
+        # Remove exam entries with blank/null scores
+        if not df_sg_exams.empty:
+            df_sg_exams["score"] = pd.to_numeric(df_sg_exams["score"], errors="coerce")
+            df_sg_exams = df_sg_exams[df_sg_exams["score"].notna()].reset_index(drop=True)
         if "sg_notes" not in st.session_state:
             st.session_state.sg_notes = load_sg_notes()
         if "sg_legend" not in st.session_state:
@@ -1029,11 +1033,12 @@ def render_app(config):
                 ec1, ec2 = st.columns(2)
                 with ec1:
                     current_tag_label = tag_to_labeled.get(eq_existing_color, "— None —")
-                    eq_tag = st.selectbox("Tag:", labeled_options, index=labeled_options.index(current_tag_label) if current_tag_label in labeled_options else 0, key="eq_tag")
+                    tag_idx = labeled_options.index(current_tag_label) if current_tag_label in labeled_options else 0
+                    eq_tag = st.selectbox("Tag:", labeled_options, index=tag_idx, key=f"eq_tag_{sid_str}")
                 with ec2:
                     test_options = ["Auto", "SAT", "ACT"]
                     current_test = eq_existing_test if eq_existing_test in ["SAT", "ACT"] else "Auto"
-                    eq_test = st.selectbox("Test Type:", test_options, index=test_options.index(current_test), key="eq_test")
+                    eq_test = st.selectbox("Test Type:", test_options, index=test_options.index(current_test), key=f"eq_test_{sid_str}")
 
                 eq_note = st.text_area("Notes:", value=eq_existing_note, height=150, key=f"eq_note_{eq_sid}")
 
