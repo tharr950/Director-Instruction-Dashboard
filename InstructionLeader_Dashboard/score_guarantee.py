@@ -585,15 +585,17 @@ def render_app(config):
                             typed = typed.dropna(subset=["score"])
                             before = typed[typed["before_or_after_tutoring"] == "before"].sort_values("exam_date", ascending=False)
                             after = typed[typed["before_or_after_tutoring"] == "after"].sort_values("exam_date", ascending=False)
+                            # Clear all scores first
+                            sg.at[sg_idx, "starting_score"] = np.nan
+                            sg.at[sg_idx, "starting_test_taken"] = pd.NaT
+                            sg.at[sg_idx, "latest_test_score"] = np.nan
+                            sg.at[sg_idx, "last_test_taken"] = pd.NaT
                             if len(before) > 0:
-                                sg.loc[sg_idx, "starting_score"] = before.iloc[0]["score"]
-                                sg.loc[sg_idx, "starting_test_taken"] = before.iloc[0]["exam_date"]
+                                sg.at[sg_idx, "starting_score"] = float(before.iloc[0]["score"])
+                                sg.at[sg_idx, "starting_test_taken"] = before.iloc[0]["exam_date"]
                             if len(after) > 0:
-                                sg.loc[sg_idx, "latest_test_score"] = after.iloc[0]["score"]
-                                sg.loc[sg_idx, "last_test_taken"] = after.iloc[0]["exam_date"]
-                            else:
-                                sg.loc[sg_idx, "latest_test_score"] = np.nan
-                                sg.loc[sg_idx, "last_test_taken"] = pd.NaT
+                                sg.at[sg_idx, "latest_test_score"] = float(after.iloc[0]["score"])
+                                sg.at[sg_idx, "last_test_taken"] = after.iloc[0]["exam_date"]
                         sg.at[sg_idx, "test_type"] = ov
                         # Recalculate derived fields
                         s_score = sg.at[sg_idx, "starting_score"]
