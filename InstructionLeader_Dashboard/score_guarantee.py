@@ -1422,25 +1422,66 @@ def render_app(config):
                 "<p class='section-title'>Score Changes by Student</p>",
                 unsafe_allow_html=True,
             )
-            plot_sg = has_scores[["student", "score_change"]].sort_values("score_change", ascending=True)
-            colors = ["#10b981" if x >= 0 else "#ef4444" for x in plot_sg["score_change"]]
-            fig_sg = go.Figure()
-            fig_sg.add_trace(go.Bar(
-                y=plot_sg["student"], x=plot_sg["score_change"], orientation="h",
-                marker_color=colors,
-                text=plot_sg["score_change"].apply(lambda x: f"{x:+.0f}"),
-                textposition="outside", textfont=dict(size=11),
-            ))
-            fig_sg.update_layout(
-                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                font=dict(family="DM Sans", color="#475569"),
-                margin=dict(l=10, r=40, t=20, b=40),
-                xaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Score Change"),
-                yaxis=dict(automargin=True),
-                height=max(400, len(plot_sg) * 30 + 80),
-                showlegend=False,
+
+            # Determine test type per student
+            has_scores["_test"] = has_scores.apply(
+                lambda r: "SAT" if pd.notna(r.get("starting_score")) and r["starting_score"] > 100 else "ACT", axis=1
             )
-            st.plotly_chart(fig_sg, use_container_width=True)
+
+            sat_scores = has_scores[has_scores["_test"] == "SAT"]
+            act_scores = has_scores[has_scores["_test"] == "ACT"]
+
+            sc_col1, sc_col2 = st.columns(2)
+
+            with sc_col1:
+                if len(sat_scores) > 0:
+                    plot_sat = sat_scores[["student", "score_change"]].sort_values("score_change", ascending=True)
+                    colors_sat = ["#10b981" if x >= 0 else "#ef4444" for x in plot_sat["score_change"]]
+                    fig_sat = go.Figure()
+                    fig_sat.add_trace(go.Bar(
+                        y=plot_sat["student"], x=plot_sat["score_change"], orientation="h",
+                        marker_color=colors_sat,
+                        text=plot_sat["score_change"].apply(lambda x: f"{x:+.0f}"),
+                        textposition="outside", textfont=dict(size=11),
+                    ))
+                    fig_sat.update_layout(
+                        title=dict(text="SAT", font=dict(size=14, color="#1e293b"), x=0.5, xanchor="center"),
+                        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                        font=dict(family="DM Sans", color="#475569"),
+                        margin=dict(l=10, r=40, t=40, b=40),
+                        xaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Score Change"),
+                        yaxis=dict(automargin=True),
+                        height=max(300, len(plot_sat) * 30 + 80),
+                        showlegend=False,
+                    )
+                    st.plotly_chart(fig_sat, use_container_width=True)
+                else:
+                    st.info("No SAT students with score changes.")
+
+            with sc_col2:
+                if len(act_scores) > 0:
+                    plot_act = act_scores[["student", "score_change"]].sort_values("score_change", ascending=True)
+                    colors_act = ["#10b981" if x >= 0 else "#ef4444" for x in plot_act["score_change"]]
+                    fig_act = go.Figure()
+                    fig_act.add_trace(go.Bar(
+                        y=plot_act["student"], x=plot_act["score_change"], orientation="h",
+                        marker_color=colors_act,
+                        text=plot_act["score_change"].apply(lambda x: f"{x:+.0f}"),
+                        textposition="outside", textfont=dict(size=11),
+                    ))
+                    fig_act.update_layout(
+                        title=dict(text="ACT", font=dict(size=14, color="#1e293b"), x=0.5, xanchor="center"),
+                        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                        font=dict(family="DM Sans", color="#475569"),
+                        margin=dict(l=10, r=40, t=40, b=40),
+                        xaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Score Change"),
+                        yaxis=dict(automargin=True),
+                        height=max(300, len(plot_act) * 30 + 80),
+                        showlegend=False,
+                    )
+                    st.plotly_chart(fig_act, use_container_width=True)
+                else:
+                    st.info("No ACT students with score changes.")
 
         # Fetched at
         if "fetched_at" in df_sg.columns:
