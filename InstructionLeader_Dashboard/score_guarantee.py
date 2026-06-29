@@ -952,7 +952,7 @@ def render_app(config):
         matrix = matrix.rename(columns={"student": "Student", "tutor": "Tutor", "advisor": "Advisor"})
 
         # Color tag and notes — always last
-        color_options = ["", "🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
+        color_options = ["", "🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "⚫", "🟤"]
         matrix["Sess Gap"] = filtered_comp.apply(
             lambda r: f"⚠️ {int(r['max_session_gap'])}d" if pd.notna(r.get("session_gap")) and bool(r.get("session_gap")) else (
                 f"✅ {int(r['max_session_gap'])}d" if pd.notna(r.get("max_session_gap")) else "—"
@@ -998,6 +998,8 @@ def render_app(config):
             "🟢": "rgba(34,197,94,0.12)",
             "🔵": "rgba(59,130,246,0.12)",
             "🟣": "rgba(168,85,247,0.12)",
+                "⚫": "rgba(0,0,0,0.08)",
+                "🟤": "rgba(180,83,9,0.12)",
         }
 
         def shade_rows(row):
@@ -1072,7 +1074,7 @@ def render_app(config):
         # Editable tag and notes in expander
         with st.expander("✏️ Edit Tags, Test Type & Notes", expanded=False):
             legend = st.session_state.sg_legend
-            tag_emojis = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
+            tag_emojis = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "⚫", "🟤"]
             tag_to_labeled = {"": "— None —"}
             for e in tag_emojis:
                 tag_to_labeled[e] = f"{e} {legend[e]}" if legend.get(e) else e
@@ -1166,11 +1168,11 @@ def render_app(config):
         with st.expander("🎨 Color Legend — click to edit", expanded=False):
             st.markdown("<p style='color:#64748b; font-size:0.82rem;'>Define what each color tag means:</p>", unsafe_allow_html=True)
             st.markdown("<p style='color:#94a3b8; font-size:0.75rem; font-style:italic;'>💡 Students tagged with labels named exactly \"Not Score Guarantee\", \"Completed\", or \"Refunded\" will be automatically hidden from all tables and alerts. Use the checkbox above the table to show them again.</p>", unsafe_allow_html=True)
-            legend_colors = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
+            legend_colors = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "⚫", "🟤"]
             new_legend = {}
             lc1, lc2 = st.columns(2)
             for idx, color in enumerate(legend_colors):
-                col = lc1 if idx < 3 else lc2
+                col = lc1 if idx < 4 else lc2
                 with col:
                     label = st.text_input(
                         f"{color}",
