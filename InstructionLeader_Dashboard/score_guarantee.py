@@ -1414,7 +1414,7 @@ def render_app(config):
                 st.info("No exam data available for this student.")
 
         # ── Score improvement chart ───────────────────────────────────────
-        has_scores = comp_df.dropna(subset=["starting_score", "latest_score"])
+        has_scores = filtered_comp.dropna(subset=["starting_score", "latest_score"])
         if len(has_scores) > 0:
             st.markdown("")
             st.markdown(
