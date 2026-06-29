@@ -320,8 +320,7 @@ def render_app(config):
                 if pd.isna(pkg_hrs) or pd.isna(row.get("first_test_prep_session")):
                     continue
                 required_total = 4
-                num_milestones = 4
-                milestone_hours = [(pkg_hrs / num_milestones) * (i + 1) for i in range(num_milestones)]
+                milestone_hours = [5, 10, 15, 20]
                 completed = row["completed_test_prep_hours"] if pd.notna(row.get("completed_test_prep_hours")) else 0
                 exams_expected = sum(1 for mh in milestone_hours if completed >= mh)
                 exams_taken = 0
@@ -351,7 +350,7 @@ def render_app(config):
                     f"<tr><td style='padding:1px 0;'>Advisor</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{b['advisor']}</td></tr>"
                     f"<tr><td style='padding:1px 0;'>Tutor</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{b['tutor']}</td></tr>"
                     f"<tr><td style='padding:1px 0;'>Exams</td><td style='padding:1px 0; text-align:right; color:#92400e; font-weight:600;'>{b['exams_taken']}/{b['exams_expected']} taken</td></tr>"
-                    f"<tr><td style='padding:1px 0;'>Hours</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{b['completed']:.0f}/{b['pkg_hrs']:.0f} hrs</td></tr>"
+                    f"<tr><td style='padding:1px 0;'>Hours</td><td style='padding:1px 0; text-align:right; color:#1e293b;'>{b['completed']:.0f}/20 hrs</td></tr>"
                     f"</table></div>"
                 )
             behind_html = (
