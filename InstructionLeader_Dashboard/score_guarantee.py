@@ -512,9 +512,20 @@ def render_app(config):
 
         # ── Apply test type overrides directly to sg ──────────────────────
         # ── Re-derive scores per student based on test_type ─────────────
+        # Build set of overridden student IDs so we don't overwrite them
+        overridden_sids = set()
+        if not st.session_state.sg_notes.empty and "test_type_override" in st.session_state.sg_notes.columns:
+            for _, nr in st.session_state.sg_notes.iterrows():
+                ov = str(nr.get("test_type_override", "") or "")
+                if ov in ["SAT", "ACT"]:
+                    overridden_sids.add(str(nr["student_id"]).split(".")[0])
+
         if not df_sg_exams.empty:
             for sg_idx in sg.index:
                 sid = sg.at[sg_idx, "student_id"]
+                # Skip students with manual overrides — already handled
+                if str(sid).split(".")[0] in overridden_sids:
+                    continue
                 tt = sg.at[sg_idx, "test_type"]
                 if tt not in ["SAT", "ACT"]:
                     continue
