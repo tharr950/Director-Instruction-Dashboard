@@ -868,6 +868,18 @@ def render_app(config):
             sel_fls = st.multiselect("Filter by Faculty Leader", sg_fls, key="sg_filter_fl")
 
         filtered_comp = comp_df.copy()
+
+        # Blank field filters
+        bf1, bf2 = st.columns(2)
+        with bf1:
+            show_blank_fl = st.checkbox("Show only blank Faculty Leader", key="sg_blank_fl")
+        with bf2:
+            show_blank_tutor = st.checkbox("Show only blank Tutor", key="sg_blank_tutor")
+        if show_blank_fl:
+            filtered_comp = filtered_comp[filtered_comp["faculty_leader"].isna() | (filtered_comp["faculty_leader"] == "") | (filtered_comp["faculty_leader"] == "—")]
+        if show_blank_tutor:
+            filtered_comp = filtered_comp[filtered_comp["tutor"].isna() | (filtered_comp["tutor"] == "") | (filtered_comp["tutor"].str.strip() == "")]
+
         if sel_students:
             filtered_comp = filtered_comp[filtered_comp["student"].isin(sel_students)]
         if sel_tutors:
