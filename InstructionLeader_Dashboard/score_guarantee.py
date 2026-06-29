@@ -735,6 +735,12 @@ def render_app(config):
             if not df_sg_exams.empty and sid in df_sg_exams["student_id"].values:
                 stu_exams = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
                 stu_exams["exam_date"] = pd.to_datetime(stu_exams["exam_date"], errors="coerce")
+                # Filter by test type
+                _tt = str(sg.loc[sg["student_id"] == sid, "test_type"].iloc[0]) if sid in sg["student_id"].values else ""
+                if _tt == "SAT":
+                    stu_exams = stu_exams[stu_exams["exam_type"].isin(["SAT", "Digital SAT"])]
+                elif _tt == "ACT":
+                    stu_exams = stu_exams[stu_exams["exam_type"].isin(["ACT", "Digital ACT"])]
                 after_exams = stu_exams[stu_exams["before_or_after_tutoring"] == "after"]
                 checks["7_practice_tests"] = len(after_exams) >= required_tests
                 checks["7_taken"] = len(after_exams)
