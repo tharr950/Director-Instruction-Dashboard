@@ -273,8 +273,24 @@ def render_app(config):
             )
             st.markdown("")
 
+        # ── Compute hidden tags ───────────────────────────────────────────
+        legend_for_hide = st.session_state.sg_legend
+        hide_tags_alert = set()
+        for emoji, label in legend_for_hide.items():
+            if str(label).strip().lower() in ["not score guarantee", "completed"]:
+                hide_tags_alert.add(emoji)
+
+        hidden_sids_alert = set()
+        if not st.session_state.sg_notes.empty and "color" in st.session_state.sg_notes.columns:
+            for _, nr in st.session_state.sg_notes.iterrows():
+                if str(nr.get("color", "")) in hide_tags_alert:
+                    hidden_sids_alert.add(str(nr["student_id"]).split(".")[0])
+
         # ── Score Guarantee Alerts ────────────────────────────────────────
         sg_alert_data = df_sg.copy()
+        sg_alert_data["_sid_str"] = sg_alert_data["student_id"].astype(str).str.split(".").str[0]
+        sg_alert_data = sg_alert_data[~sg_alert_data["_sid_str"].isin(hidden_sids_alert)]
+        sg_alert_data.drop(columns=["_sid_str"], inplace=True)
         for col in ["first_test_prep_session", "starting_test_taken", "won_at"]:
             if col in sg_alert_data.columns:
                 sg_alert_data[col] = pd.to_datetime(sg_alert_data[col], errors="coerce")
