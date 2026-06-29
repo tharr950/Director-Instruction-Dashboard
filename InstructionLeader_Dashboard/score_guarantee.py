@@ -277,7 +277,7 @@ def render_app(config):
         legend_for_hide = st.session_state.sg_legend
         hide_tags_alert = set()
         for emoji, label in legend_for_hide.items():
-            if str(label).strip().lower() in ["not score guarantee", "completed"]:
+            if str(label).strip().lower() in ["not score guarantee", "completed", "refunded"]:
                 hide_tags_alert.add(emoji)
 
         hidden_sids_alert = set()
@@ -885,10 +885,10 @@ def render_app(config):
         legend = st.session_state.sg_legend
         hide_tags = set()
         for emoji, label in legend.items():
-            if str(label).strip().lower() in ["not score guarantee", "completed"]:
+            if str(label).strip().lower() in ["not score guarantee", "completed", "refunded"]:
                 hide_tags.add(emoji)
 
-        show_hidden = st.checkbox("Show hidden students (Not Score Guarantee / Completed)", value=False, key="sg_show_hidden")
+        show_hidden = st.checkbox("Show hidden students (Not Score Guarantee / Completed / Refunded)", value=False, key="sg_show_hidden")
         if not show_hidden and hide_tags:
             filtered_comp = filtered_comp[~filtered_comp["color"].isin(hide_tags)]
 
@@ -1165,7 +1165,7 @@ def render_app(config):
         legend = st.session_state.sg_legend
         with st.expander("🎨 Color Legend — click to edit", expanded=False):
             st.markdown("<p style='color:#64748b; font-size:0.82rem;'>Define what each color tag means:</p>", unsafe_allow_html=True)
-            st.markdown("<p style='color:#94a3b8; font-size:0.75rem; font-style:italic;'>💡 Students tagged with labels named exactly \"Not Score Guarantee\" or \"Completed\" will be automatically hidden from all tables and alerts. Use the checkbox above the table to show them again.</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color:#94a3b8; font-size:0.75rem; font-style:italic;'>💡 Students tagged with labels named exactly \"Not Score Guarantee\", \"Completed\", or \"Refunded\" will be automatically hidden from all tables and alerts. Use the checkbox above the table to show them again.</p>", unsafe_allow_html=True)
             legend_colors = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
             new_legend = {}
             lc1, lc2 = st.columns(2)
