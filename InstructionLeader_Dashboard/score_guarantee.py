@@ -287,7 +287,7 @@ def render_app(config):
                     hidden_sids_alert.add(str(nr["student_id"]).split(".")[0])
 
         # ── Score Guarantee Alerts ────────────────────────────────────────
-        sg_alert_data = df_sg.copy()
+        sg_alert_data = sg.copy()
         sg_alert_data["_sid_str"] = sg_alert_data["student_id"].astype(str).str.split(".").str[0]
         sg_alert_data = sg_alert_data[~sg_alert_data["_sid_str"].isin(hidden_sids_alert)]
         sg_alert_data.drop(columns=["_sid_str"], inplace=True)
