@@ -366,7 +366,16 @@ def render_app(config):
                 exams_expected = sum(1 for mh in milestone_hours if completed >= mh)
                 exams_taken = 0
                 if sid in df_sg_exams["student_id"].values:
-                    exams_taken = len(df_sg_exams[(df_sg_exams["student_id"] == sid) & (df_sg_exams["before_or_after_tutoring"] == "after")])
+                    alert_exams = df_sg_exams[(df_sg_exams["student_id"] == sid) & (df_sg_exams["before_or_after_tutoring"] == "after")].copy()
+                    alert_exams["score"] = pd.to_numeric(alert_exams["score"], errors="coerce")
+                    # Detect test type for this student
+                    alert_baseline = row.get("starting_score")
+                    if pd.notna(alert_baseline):
+                        if alert_baseline > 100:
+                            alert_exams = alert_exams[alert_exams["exam_type"].isin(["SAT", "Digital SAT"])]
+                        else:
+                            alert_exams = alert_exams[alert_exams["exam_type"].isin(["ACT", "Digital ACT"])]
+                    exams_taken = len(alert_exams)
                 if exams_expected > 0 and exams_taken < exams_expected:
                     behind_on_exams.append({
                         "student": row.get("student", "Unknown"),
@@ -411,6 +420,12 @@ def render_app(config):
                 stu_exams = df_sg_exams[df_sg_exams["student_id"] == sid].copy()
                 stu_exams["exam_date"] = pd.to_datetime(stu_exams["exam_date"], errors="coerce")
                 stu_exams["score"] = pd.to_numeric(stu_exams["score"], errors="coerce")
+                # Filter by test type
+                if pd.notna(baseline):
+                    if baseline > 100:
+                        stu_exams = stu_exams[stu_exams["exam_type"].isin(["SAT", "Digital SAT"])]
+                    else:
+                        stu_exams = stu_exams[stu_exams["exam_type"].isin(["ACT", "Digital ACT"])]
                 after_exams = stu_exams[
                     (stu_exams["before_or_after_tutoring"] == "after") & stu_exams["score"].notna()
                 ].sort_values("exam_date")
