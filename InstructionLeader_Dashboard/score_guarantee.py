@@ -287,7 +287,32 @@ def render_app(config):
                     hidden_sids_alert.add(str(nr["student_id"]).split(".")[0])
 
         # ── Score Guarantee Alerts ────────────────────────────────────────
-        sg_alert_data = sg.copy()
+        sg_alert_data = df_sg.copy()
+        for col in ["starting_score", "starting_test_taken", "latest_test_score", "last_test_taken"]:
+            if col in sg_alert_data.columns:
+                sg_alert_data[col] = sg_alert_data[col].astype(object)
+        # Apply test type overrides to alert data too
+        if not st.session_state.sg_notes.empty and "test_type_override" in st.session_state.sg_notes.columns:
+            for _, nr in st.session_state.sg_notes.iterrows():
+                ov = str(nr.get("test_type_override", "") or "")
+                if ov not in ["SAT", "ACT"]:
+                    continue
+                ov_sid = str(nr["student_id"]).split(".")[0]
+                for a_idx in sg_alert_data.index:
+                    if str(sg_alert_data.at[a_idx, "student_id"]).split(".")[0] == ov_sid:
+                        if not df_sg_exams.empty:
+                            stu_ex = df_sg_exams[df_sg_exams["student_id"].astype(str).str.split(".").str[0] == ov_sid].copy()
+                            stu_ex["exam_date"] = pd.to_datetime(stu_ex["exam_date"], errors="coerce")
+                            stu_ex["score"] = pd.to_numeric(stu_ex["score"], errors="coerce")
+                            if ov == "SAT":
+                                typed = stu_ex[stu_ex["exam_type"].isin(["SAT", "Digital SAT"])]
+                            else:
+                                typed = stu_ex[stu_ex["exam_type"].isin(["ACT", "Digital ACT"])]
+                            typed = typed.dropna(subset=["score"])
+                            before = typed[typed["before_or_after_tutoring"] == "before"].sort_values("exam_date", ascending=False)
+                            sg_alert_data.at[a_idx, "starting_score"] = float(before.iloc[0]["score"]) if len(before) > 0 else np.nan
+                            sg_alert_data.at[a_idx, "starting_test_taken"] = before.iloc[0]["exam_date"] if len(before) > 0 else pd.NaT
+                        break
         sg_alert_data["_sid_str"] = sg_alert_data["student_id"].astype(str).str.split(".").str[0]
         sg_alert_data = sg_alert_data[~sg_alert_data["_sid_str"].isin(hidden_sids_alert)]
         sg_alert_data.drop(columns=["_sid_str"], inplace=True)
