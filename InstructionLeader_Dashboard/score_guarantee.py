@@ -507,7 +507,7 @@ def render_app(config):
         )
         # Match on first tutor if multiple
         sg["_tutor_match"] = sg["tutor"].apply(
-            lambda x: x.split(",")[0].strip() if pd.notna(x) else None
+            lambda x: x.split(",")[1].strip() if pd.notna(x) and "," in x else (x.split(",")[0].strip() if pd.notna(x) else None)
         )
         sg = sg.merge(tutor_to_fl, on="_tutor_match", how="left")
         sg.drop(columns=["_tutor_match"], inplace=True)
