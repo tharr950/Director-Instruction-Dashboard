@@ -1557,11 +1557,84 @@ def render_app(config):
                     hm3.metric("HW Completed", hw_completed_count)
                     hm4.metric("HW Not Completed", hw_not_completed_count)
 
-                    st.dataframe(hw_df, hide_index=True, use_container_width=True,
-                                 height=min(400, len(hw_df) * 35 + 60),
-                                 column_config={
-                                     "Snippet": st.column_config.TextColumn("Snippet", width="large"),
-                                 })
+                    import html as _html
+
+                    def highlight_body(body_text, hw_kws, pos_kws, neg_kws):
+                        if not body_text or body_text == "nan":
+                            return ""
+                        safe = _html.escape(body_text)
+                        lower = safe.lower()
+                        # Build spans for highlights — collect all match positions
+                        highlights = []
+                        for kw in neg_kws:
+                            idx = 0
+                            while True:
+                                idx = lower.find(kw, idx)
+                                if idx == -1:
+                                    break
+                                highlights.append((idx, idx + len(kw), "#fecaca", "#991b1b"))  # red
+                                idx += len(kw)
+                        for kw in pos_kws:
+                            idx = 0
+                            while True:
+                                idx = lower.find(kw, idx)
+                                if idx == -1:
+                                    break
+                                highlights.append((idx, idx + len(kw), "#dcfce7", "#166534"))  # green
+                                idx += len(kw)
+                        for kw in hw_kws:
+                            idx = 0
+                            while True:
+                                idx = lower.find(kw, idx)
+                                if idx == -1:
+                                    break
+                                # Don't double-highlight
+                                already = any(s <= idx < e for s, e, _, _ in highlights)
+                                if not already:
+                                    highlights.append((idx, idx + len(kw), "#fef9c3", "#854d0e"))  # yellow
+                                idx += len(kw)
+                        # Sort by position, apply from end to avoid shifting
+                        highlights.sort(key=lambda x: x[0], reverse=True)
+                        for start, end, bg, color in highlights:
+                            safe = safe[:start] + f"<span style='background:{bg}; color:{color}; padding:1px 3px; border-radius:3px; font-weight:600;'>" + safe[start:end] + "</span>" + safe[end:]
+                        return safe.replace("\n", "<br>")
+
+                    for _, upd in stu_updates.iterrows():
+                        date_val = upd["sent_at"].strftime("%Y-%m-%d") if pd.notna(upd.get("sent_at")) else "—"
+                        tutor_val = upd.get("tutor", "—")
+                        msg_type = upd.get("message_type", "—")
+                        body_raw = str(upd.get("body", ""))
+                        body_lower = body_raw.lower()
+                        hw_found = any(kw in body_lower for kw in hw_keywords)
+
+                        if hw_found:
+                            has_neg = any(kw in body_lower for kw in completion_negative)
+                            has_pos = any(kw in body_lower for kw in completion_positive)
+                            if has_neg:
+                                border = "#fecaca"
+                                badge = "<span style='background:#fef2f2; color:#991b1b; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;'>❌ HW Not Completed</span>"
+                            elif has_pos:
+                                border = "#bbf7d0"
+                                badge = "<span style='background:#f0fdf4; color:#166534; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;'>✅ HW Completed</span>"
+                            else:
+                                border = "#fde68a"
+                                badge = "<span style='background:#fffbeb; color:#854d0e; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;'>📝 HW Assigned</span>"
+                        else:
+                            border = "#e2e8f0"
+                            badge = "<span style='background:#f1f5f9; color:#64748b; padding:2px 8px; border-radius:4px; font-size:0.75rem;'>No HW mention</span>"
+
+                        highlighted = highlight_body(body_raw, hw_keywords, completion_positive, completion_negative)
+
+                        st.markdown(
+                            f"<div style='border:1px solid {border}; border-radius:8px; padding:12px 16px; margin:8px 0;'>"
+                            f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>"
+                            f"<span style='font-weight:600; color:#1e293b;'>{date_val} — {tutor_val}</span>"
+                            f"<span>{badge} <span style='color:#94a3b8; font-size:0.75rem; margin-left:8px;'>{msg_type}</span></span>"
+                            f"</div>"
+                            f"<div style='font-size:0.82rem; color:#374151; line-height:1.5;'>{highlighted}</div>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
                 else:
                     st.info("No parent/progress updates found for this student.")
             else:
