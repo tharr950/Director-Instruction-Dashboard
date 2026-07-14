@@ -96,6 +96,39 @@ def render_app(config):
         return pd.read_csv(io.StringIO(decoded))
 
     @st.cache_data(ttl=3600)
+    def load_parent_progress_updates():
+        query = """
+        SELECT
+            ca.id AS update_id,
+            ca.created_at AS sent_at,
+            ca.message_type,
+            ca.body,
+            tutor_users.first_name||' '||tutor_users.last_name AS tutor,
+            student_users.first_name||' '||student_users.last_name AS student_name,
+            COALESCE(s.course_id, ca.regarding_id) AS course_id
+        FROM dw.contact_activities ca
+            JOIN dw.employees e_tutor ON e_tutor.id = ca.employee_id
+            JOIN dw.users tutor_users ON e_tutor.user_id = tutor_users.id
+            LEFT JOIN dw.sessions s ON (ca.regarding_type = 'Session' AND ca.regarding_id = s.id)
+            LEFT JOIN dw.enrollments enr ON enr.course_id = COALESCE(s.course_id, ca.regarding_id)
+            LEFT JOIN dw.students stu ON enr.enrollee_id = stu.id
+            LEFT JOIN dw.users student_users ON stu.user_id = student_users.id
+        WHERE ca.type = 'Contact::Message'
+            AND ca.message_type IN ('Parent Update', 'Progress Update')
+            AND ca.body IS NOT NULL
+            AND ca.body != ''
+            AND ca.created_at >= DATEADD(year, -2, GETDATE())
+        ORDER BY ca.created_at DESC
+        """
+        try:
+            conn = get_redshift_connection()
+            df = pd.read_sql(query, conn)
+            df["sent_at"] = pd.to_datetime(df["sent_at"], errors="coerce")
+            return df
+        except Exception:
+            return pd.DataFrame()
+
+    @st.cache_data(ttl=3600)
     def load_sg_sessions():
         token = st.secrets.get("github", {}).get("token", "")
         repo = st.secrets.get("github", {}).get("repo", "")
@@ -203,6 +236,7 @@ def render_app(config):
         df_sg = load_score_guarantee()
         df_sg_sessions = load_sg_sessions()
         df_sg_exams = load_sg_exams()
+        df_progress = load_parent_progress_updates()
         # Remove exam entries with blank/null scores
         if not df_sg_exams.empty:
             df_sg_exams["score"] = pd.to_numeric(df_sg_exams["score"], errors="coerce")
