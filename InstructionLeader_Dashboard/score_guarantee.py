@@ -1374,7 +1374,16 @@ def render_app(config):
                     sess_cols.append("session_notes")
                 sess_display = stu_sess[sess_cols].copy()
                 sess_display["starts_at"] = sess_display["starts_at"].dt.strftime("%Y-%m-%d %I:%M %p")
-                sess_display["attended"] = sess_display["attended"].apply(lambda x: "✅" if x == 1 else "❌")
+                now_str = pd.Timestamp.now().strftime("%Y-%m-%d %I:%M %p")
+                def format_attended(row):
+                    try:
+                        sess_time = pd.to_datetime(row["Date"])
+                        if sess_time > pd.Timestamp.now():
+                            return "⏳"
+                    except:
+                        pass
+                    return "✅" if row["attended"] == 1 else "❌"
+                sess_display["attended"] = sess_display.apply(format_attended, axis=1)
                 sess_display["session_hours"] = sess_display["session_hours"].round(2)
                 rename_map = {
                     "starts_at": "Date", "session_hours": "Hours",
