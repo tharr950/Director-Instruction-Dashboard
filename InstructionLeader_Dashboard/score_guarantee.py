@@ -663,7 +663,8 @@ def render_app(config):
             if not df_sg_sessions.empty and sid in df_sg_sessions["student_id"].values:
                 stu_sess_gap = df_sg_sessions[df_sg_sessions["student_id"] == sid].copy()
                 stu_sess_gap["starts_at"] = pd.to_datetime(stu_sess_gap["starts_at"], errors="coerce")
-                stu_sess_gap = stu_sess_gap.dropna(subset=["starts_at"]).sort_values("starts_at")
+                stu_sess_gap = stu_sess_gap.dropna(subset=["starts_at"])
+                stu_sess_gap = stu_sess_gap[stu_sess_gap["starts_at"] <= pd.Timestamp.now()].sort_values("starts_at")
                 if len(stu_sess_gap) >= 2:
                     gaps = stu_sess_gap["starts_at"].diff().dt.days.dropna()
                     max_gap = int(gaps.max()) if len(gaps) > 0 else 0
@@ -716,9 +717,11 @@ def render_app(config):
                 # No baseline, no tutoring — not applicable
                 checks["4_baseline"] = None
 
-            # 5. No missed sessions
+            # 5. No missed sessions (past sessions only)
             if not df_sg_sessions.empty and sid in df_sg_sessions["student_id"].values:
-                stu_sess = df_sg_sessions[df_sg_sessions["student_id"] == sid]
+                stu_sess_all = df_sg_sessions[df_sg_sessions["student_id"] == sid].copy()
+                stu_sess_all["starts_at"] = pd.to_datetime(stu_sess_all["starts_at"], errors="coerce")
+                stu_sess = stu_sess_all[stu_sess_all["starts_at"] <= pd.Timestamp.now()]
                 total_sessions = len(stu_sess)
                 attended_sessions = int(stu_sess["attended"].sum())
                 checks["5_attendance"] = attended_sessions == total_sessions
@@ -1377,7 +1380,7 @@ def render_app(config):
                 now_str = pd.Timestamp.now().strftime("%Y-%m-%d %I:%M %p")
                 def format_attended(row):
                     try:
-                        sess_time = pd.to_datetime(row["Date"])
+                        sess_time = pd.to_datetime(row["starts_at"])
                         if sess_time > pd.Timestamp.now():
                             return "⏳"
                     except:
