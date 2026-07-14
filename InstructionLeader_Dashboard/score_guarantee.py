@@ -745,8 +745,10 @@ def render_app(config):
                 elif _tt == "ACT":
                     stu_exams = stu_exams[stu_exams["exam_type"].isin(["ACT", "Digital ACT"])]
                 after_exams = stu_exams[stu_exams["before_or_after_tutoring"] == "after"]
-                checks["7_practice_tests"] = len(after_exams) >= required_tests
-                checks["7_taken"] = len(after_exams)
+                # Exclude Official Exams from practice test count
+                practice_exams = after_exams[after_exams["exam_code"] != "Official Exam"] if "exam_code" in after_exams.columns else after_exams
+                checks["7_practice_tests"] = len(practice_exams) >= required_tests
+                checks["7_taken"] = len(practice_exams)
                 checks["7_required"] = required_tests
 
                 # 8. At least 1 week gap between practice tests
@@ -755,7 +757,7 @@ def render_app(config):
                     gaps = exam_dates.diff().dt.days.dropna()
                     checks["8_week_gaps"] = bool((gaps >= 7).all()) if len(gaps) > 0 else None
                     checks["8_min_gap"] = int(gaps.min()) if len(gaps) > 0 else None
-                else:
+                elif len(practice_exams) < 2:
                     checks["8_week_gaps"] = None
                     checks["8_min_gap"] = None
             else:
