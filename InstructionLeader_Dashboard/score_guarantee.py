@@ -1478,6 +1478,95 @@ def render_app(config):
                 else:
                     st.error("Failed to save note. Check GitHub credentials.")
 
+
+            # Homework / Parent Updates
+            st.markdown("")
+            st.markdown("**Parent Updates & Homework:**")
+            if not df_progress.empty:
+                student_name = stu_row.get("student", "")
+                stu_updates = df_progress[df_progress["student_name"].fillna("").str.strip() == student_name.strip()].copy()
+                stu_course = stu_row.get("course_id")
+                if len(stu_updates) == 0 and pd.notna(stu_course):
+                    stu_updates = df_progress[df_progress["course_id"] == stu_course].copy()
+
+                if len(stu_updates) > 0:
+                    stu_updates = stu_updates.sort_values("sent_at", ascending=False)
+
+                    hw_keywords = ["homework", "hw", "assignment", "assigned", "practice test",
+                                   "practice exam", "worksheet", "workbook", "practice problem",
+                                   "practice section", "bluebook", "khan academy", "khan",
+                                   "practice at home", "work at home", "independent practice"]
+                    completion_positive = ["completed", "finished", "did the", "did his", "did her",
+                                           "turned in", "submitted", "done with", "worked on",
+                                           "completed all", "great job on", "nice work on"]
+                    completion_negative = ["did not complete", "didn't complete", "hasn't completed",
+                                           "has not completed", "didn't do", "did not do",
+                                           "hasn't done", "has not done", "forgot", "missing",
+                                           "incomplete", "not completed", "didn't finish",
+                                           "did not finish", "hasn't finished", "skipped"]
+
+                    hw_results = []
+                    for _, upd in stu_updates.iterrows():
+                        body = str(upd.get("body", "")).lower()
+                        date_val = upd["sent_at"].strftime("%Y-%m-%d") if pd.notna(upd.get("sent_at")) else "—"
+                        tutor_val = upd.get("tutor", "—")
+                        msg_type = upd.get("message_type", "—")
+
+                        hw_mentioned = any(kw in body for kw in hw_keywords)
+                        hw_completed = None
+                        if hw_mentioned:
+                            has_positive = any(kw in body for kw in completion_positive)
+                            has_negative = any(kw in body for kw in completion_negative)
+                            if has_negative:
+                                hw_completed = "❌ Not completed"
+                            elif has_positive:
+                                hw_completed = "✅ Completed"
+                            else:
+                                hw_completed = "📝 Assigned (no status)"
+
+                        snippet = ""
+                        if hw_mentioned:
+                            body_orig = str(upd.get("body", ""))
+                            for kw in hw_keywords:
+                                idx = body.find(kw)
+                                if idx >= 0:
+                                    start = max(0, idx - 50)
+                                    end = min(len(body_orig), idx + len(kw) + 150)
+                                    snippet = "..." + body_orig[start:end].strip() + "..."
+                                    break
+
+                        hw_results.append({
+                            "Date": date_val,
+                            "Type": msg_type,
+                            "Tutor": tutor_val,
+                            "HW Mentioned": "✅" if hw_mentioned else "❌",
+                            "Status": hw_completed or "—",
+                            "Snippet": snippet or "—",
+                        })
+
+                    hw_df = pd.DataFrame(hw_results)
+
+                    total_updates = len(hw_df)
+                    hw_mentioned_count = len(hw_df[hw_df["HW Mentioned"] == "✅"])
+                    hw_completed_count = len(hw_df[hw_df["Status"].str.contains("Completed", na=False) & ~hw_df["Status"].str.contains("Not completed", na=False)])
+                    hw_not_completed_count = len(hw_df[hw_df["Status"].str.contains("Not completed", na=False)])
+
+                    hm1, hm2, hm3, hm4 = st.columns(4)
+                    hm1.metric("Total Updates", total_updates)
+                    hm2.metric("HW Mentioned", f"{hw_mentioned_count}/{total_updates}")
+                    hm3.metric("HW Completed", hw_completed_count)
+                    hm4.metric("HW Not Completed", hw_not_completed_count)
+
+                    st.dataframe(hw_df, hide_index=True, use_container_width=True,
+                                 height=min(400, len(hw_df) * 35 + 60),
+                                 column_config={
+                                     "Snippet": st.column_config.TextColumn("Snippet", width="large"),
+                                 })
+                else:
+                    st.info("No parent/progress updates found for this student.")
+            else:
+                st.warning("Parent update data not available.")
+
             # Exams table
             st.markdown("")
             st.markdown("**Exams:**")
