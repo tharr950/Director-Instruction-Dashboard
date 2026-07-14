@@ -274,21 +274,23 @@ SELECT
     sessions.starts_at,
     IFNULL(SUM(sa.minutes), 0)/60.0 AS session_hours,
     sessions.attendances_attended_count AS attended,
-    CONCAT(tutor_users.first_name, ' ', tutor_users.last_name) AS tutor
+    CONCAT(tutor_users.first_name, ' ', tutor_users.last_name) AS tutor,
+    GROUP_CONCAT(DISTINCT st.name SEPARATOR ', ') AS subjects_covered,
+    sessions.notes AS session_notes
 FROM cte_score_guarantee
     JOIN orbit_production.sessions
         ON (sessions.course_id = cte_score_guarantee.course_id
         AND sessions.starts_at >= cte_score_guarantee.won_at)
     LEFT JOIN orbit_production.session_allotments sa
-        ON (sessions.id = sa.session_id
-        AND sa.subject_id IN (43,356,342,316,315))
+        ON sessions.id = sa.session_id
+    LEFT JOIN orbit_production.subject_translations st
+        ON (sa.subject_id = st.subject_id AND st.locale = 'en')
     LEFT JOIN orbit_production.employees e2
         ON e2.id = sessions.supervisor_id
     LEFT JOIN orbit_production.users tutor_users
         ON e2.user_id = tutor_users.id
-WHERE sa.minutes > 0
 GROUP BY cte_score_guarantee.student_id, cte_score_guarantee.course_id,
-         sessions.id, sessions.starts_at, sessions.attendances_attended_count, tutor
+         sessions.id, sessions.starts_at, sessions.attendances_attended_count, tutor, sessions.notes
 ORDER BY cte_score_guarantee.student_id, sessions.starts_at
 """
 

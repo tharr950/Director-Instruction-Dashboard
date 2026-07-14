@@ -943,3 +943,386 @@ mysql.connector.errors.DatabaseError: 2003 (HY000): Can't connect to MySQL serve
 [2026-06-29 06:00:37] Pushing exams to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_exams.csv)...
 [2026-06-29 06:00:40] Updated exams.
 [2026-06-29 06:00:40] ✅ Done — all 3 datasets synced.
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:240: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g    = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+[2026-06-30 06:00:01] Connecting to MySQL for Score Guarantee...
+[2026-06-30 06:00:22] Fetched 60 rows.
+[2026-06-30 06:00:22] Pushing to GitHub (tharr950/fl-dashboards-data/data/score_guarantee.csv)...
+[2026-06-30 06:00:24] Updated existing file.
+[2026-06-30 06:00:24] Fetching sessions...
+[2026-06-30 06:00:26] Fetched 316 sessions rows.
+[2026-06-30 06:00:26] Pushing sessions to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_sessions.csv)...
+[2026-06-30 06:00:29] Updated sessions.
+[2026-06-30 06:00:29] Fetching exams...
+[2026-06-30 06:00:31] Fetched 207 exams rows.
+[2026-06-30 06:00:31] Pushing exams to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_exams.csv)...
+[2026-06-30 06:00:33] Updated exams.
+[2026-06-30 06:00:33] ✅ Done — all 3 datasets synced.
+[2026-07-01 06:00:01] Connecting to MySQL for Score Guarantee...
+[2026-07-01 06:00:32] Attempt 1/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-01 06:00:32] Retrying in 120 seconds...
+[2026-07-01 06:02:32] Connecting to MySQL for Score Guarantee...
+[2026-07-01 06:03:02] Attempt 2/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-01 06:03:02] Retrying in 120 seconds...
+[2026-07-01 06:05:02] Connecting to MySQL for Score Guarantee...
+[2026-07-01 06:05:32] Attempt 3/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-01 06:05:32] Retrying in 120 seconds...
+[2026-07-01 06:07:32] Connecting to MySQL for Score Guarantee...
+[2026-07-01 06:08:02] Attempt 4/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-01 06:08:02] Retrying in 120 seconds...
+[2026-07-01 06:10:03] Connecting to MySQL for Score Guarantee...
+[2026-07-01 06:10:33] Attempt 5/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-01 06:10:33] All 5 attempts failed.
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 354, in _open_connection
+    self._cmysql.connect(**cnx_kwargs)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+_mysql_connector.MySQLInterfaceError: Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 450, in <module>
+    run_with_retry(_run)
+    ~~~~~~~~~~~~~~^^^^^^
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 23, in run_with_retry
+    return func()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 443, in _run
+    df = fetch_score_guarantee()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 211, in fetch_score_guarantee
+    conn = mysql.connector.connect(
+        host=RP_HOST,
+    ...<5 lines>...
+        auth_plugin="mysql_native_password",
+    )
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/pooling.py", line 322, in connect
+    return CMySQLConnection(*args, **kwargs)
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 142, in __init__
+    self.connect(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/abstracts.py", line 1604, in connect
+    self._open_connection()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 360, in _open_connection
+    raise get_mysql_exception(
+        err.errno, msg=err.msg, sqlstate=err.sqlstate
+    ) from err
+mysql.connector.errors.DatabaseError: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-02 06:00:01] Connecting to MySQL for Score Guarantee...
+[2026-07-02 06:01:01] Attempt 1/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-02 06:01:01] Retrying in 120 seconds...
+[2026-07-02 06:03:02] Connecting to MySQL for Score Guarantee...
+[2026-07-02 06:04:02] Attempt 2/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-02 06:04:02] Retrying in 120 seconds...
+[2026-07-02 06:06:02] Connecting to MySQL for Score Guarantee...
+[2026-07-02 06:07:02] Attempt 3/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-02 06:07:02] Retrying in 120 seconds...
+[2026-07-02 06:09:02] Connecting to MySQL for Score Guarantee...
+[2026-07-02 06:10:06] Attempt 4/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-02 06:10:06] Retrying in 120 seconds...
+[2026-07-02 06:12:06] Connecting to MySQL for Score Guarantee...
+[2026-07-02 06:13:06] Attempt 5/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-02 06:13:06] All 5 attempts failed.
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 354, in _open_connection
+    self._cmysql.connect(**cnx_kwargs)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+_mysql_connector.MySQLInterfaceError: Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 450, in <module>
+    run_with_retry(_run)
+    ~~~~~~~~~~~~~~^^^^^^
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 23, in run_with_retry
+    return func()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 443, in _run
+    df = fetch_score_guarantee()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 211, in fetch_score_guarantee
+    conn = mysql.connector.connect(
+        host=RP_HOST,
+    ...<5 lines>...
+        auth_plugin="mysql_native_password",
+    )
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/pooling.py", line 322, in connect
+    return CMySQLConnection(*args, **kwargs)
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 142, in __init__
+    self.connect(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/abstracts.py", line 1604, in connect
+    self._open_connection()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 360, in _open_connection
+    raise get_mysql_exception(
+        err.errno, msg=err.msg, sqlstate=err.sqlstate
+    ) from err
+mysql.connector.errors.DatabaseError: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-03 06:00:01] Connecting to MySQL for Score Guarantee...
+[2026-07-03 06:00:31] Attempt 1/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-03 06:00:31] Retrying in 120 seconds...
+[2026-07-03 06:57:52] Connecting to MySQL for Score Guarantee...
+[2026-07-03 06:57:52] Attempt 2/5 failed: 2005 (HY000): Unknown MySQL server host 'replica.revolutionprep.com' (8)
+[2026-07-03 06:57:52] Retrying in 120 seconds...
+[2026-07-03 08:03:05] Connecting to MySQL for Score Guarantee...
+[2026-07-03 08:03:05] Attempt 3/5 failed: 2005 (HY000): Unknown MySQL server host 'replica.revolutionprep.com' (8)
+[2026-07-03 08:03:05] Retrying in 120 seconds...
+[2026-07-03 08:53:27] Connecting to MySQL for Score Guarantee...
+[2026-07-03 08:53:27] Attempt 4/5 failed: 2005 (HY000): Unknown MySQL server host 'replica.revolutionprep.com' (8)
+[2026-07-03 08:53:27] Retrying in 120 seconds...
+[2026-07-03 10:04:44] Connecting to MySQL for Score Guarantee...
+[2026-07-03 10:04:44] Attempt 5/5 failed: 2005 (HY000): Unknown MySQL server host 'replica.revolutionprep.com' (8)
+[2026-07-03 10:04:44] All 5 attempts failed.
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 354, in _open_connection
+    self._cmysql.connect(**cnx_kwargs)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+_mysql_connector.MySQLInterfaceError: Unknown MySQL server host 'replica.revolutionprep.com' (8)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 450, in <module>
+    run_with_retry(_run)
+    ~~~~~~~~~~~~~~^^^^^^
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 23, in run_with_retry
+    return func()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 443, in _run
+    df = fetch_score_guarantee()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 211, in fetch_score_guarantee
+    conn = mysql.connector.connect(
+        host=RP_HOST,
+    ...<5 lines>...
+        auth_plugin="mysql_native_password",
+    )
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/pooling.py", line 322, in connect
+    return CMySQLConnection(*args, **kwargs)
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 142, in __init__
+    self.connect(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/abstracts.py", line 1604, in connect
+    self._open_connection()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 360, in _open_connection
+    raise get_mysql_exception(
+        err.errno, msg=err.msg, sqlstate=err.sqlstate
+    ) from err
+mysql.connector.errors.DatabaseError: 2005 (HY000): Unknown MySQL server host 'replica.revolutionprep.com' (8)
+[2026-07-04 06:00:02] Connecting to MySQL for Score Guarantee...
+[2026-07-04 06:00:32] Attempt 1/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-04 06:00:32] Retrying in 120 seconds...
+[2026-07-04 06:02:32] Connecting to MySQL for Score Guarantee...
+[2026-07-04 06:03:02] Attempt 2/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-04 06:03:02] Retrying in 120 seconds...
+[2026-07-04 06:05:02] Connecting to MySQL for Score Guarantee...
+[2026-07-04 06:05:32] Attempt 3/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-04 06:05:32] Retrying in 120 seconds...
+[2026-07-04 06:07:32] Connecting to MySQL for Score Guarantee...
+[2026-07-04 06:08:02] Attempt 4/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-04 06:08:02] Retrying in 120 seconds...
+[2026-07-04 06:10:02] Connecting to MySQL for Score Guarantee...
+[2026-07-04 06:10:32] Attempt 5/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-04 06:10:32] All 5 attempts failed.
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 354, in _open_connection
+    self._cmysql.connect(**cnx_kwargs)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+_mysql_connector.MySQLInterfaceError: Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 450, in <module>
+    run_with_retry(_run)
+    ~~~~~~~~~~~~~~^^^^^^
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 23, in run_with_retry
+    return func()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 443, in _run
+    df = fetch_score_guarantee()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 211, in fetch_score_guarantee
+    conn = mysql.connector.connect(
+        host=RP_HOST,
+    ...<5 lines>...
+        auth_plugin="mysql_native_password",
+    )
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/pooling.py", line 322, in connect
+    return CMySQLConnection(*args, **kwargs)
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 142, in __init__
+    self.connect(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/abstracts.py", line 1604, in connect
+    self._open_connection()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 360, in _open_connection
+    raise get_mysql_exception(
+        err.errno, msg=err.msg, sqlstate=err.sqlstate
+    ) from err
+mysql.connector.errors.DatabaseError: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-05 06:00:01] Connecting to MySQL for Score Guarantee...
+[2026-07-05 06:00:31] Attempt 1/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-05 06:00:31] Retrying in 120 seconds...
+[2026-07-05 06:02:31] Connecting to MySQL for Score Guarantee...
+[2026-07-05 06:03:01] Attempt 2/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-05 06:03:01] Retrying in 120 seconds...
+[2026-07-05 06:05:02] Connecting to MySQL for Score Guarantee...
+[2026-07-05 06:05:32] Attempt 3/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-05 06:05:32] Retrying in 120 seconds...
+[2026-07-05 06:07:32] Connecting to MySQL for Score Guarantee...
+[2026-07-05 06:08:02] Attempt 4/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-05 06:08:02] Retrying in 120 seconds...
+[2026-07-05 06:10:02] Connecting to MySQL for Score Guarantee...
+[2026-07-05 06:10:32] Attempt 5/5 failed: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+[2026-07-05 06:10:32] All 5 attempts failed.
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 354, in _open_connection
+    self._cmysql.connect(**cnx_kwargs)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+_mysql_connector.MySQLInterfaceError: Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 450, in <module>
+    run_with_retry(_run)
+    ~~~~~~~~~~~~~~^^^^^^
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 23, in run_with_retry
+    return func()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 443, in _run
+    df = fetch_score_guarantee()
+  File "/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py", line 211, in fetch_score_guarantee
+    conn = mysql.connector.connect(
+        host=RP_HOST,
+    ...<5 lines>...
+        auth_plugin="mysql_native_password",
+    )
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/pooling.py", line 322, in connect
+    return CMySQLConnection(*args, **kwargs)
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 142, in __init__
+    self.connect(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/abstracts.py", line 1604, in connect
+    self._open_connection()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/anaconda3/lib/python3.13/site-packages/mysql/connector/connection_cext.py", line 360, in _open_connection
+    raise get_mysql_exception(
+        err.errno, msg=err.msg, sqlstate=err.sqlstate
+    ) from err
+mysql.connector.errors.DatabaseError: 2003 (HY000): Can't connect to MySQL server on 'replica.revolutionprep.com:3306' (60)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:240: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g    = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+[2026-07-06 06:00:01] Connecting to MySQL for Score Guarantee...
+[2026-07-06 06:00:36] Fetched 64 rows.
+[2026-07-06 06:00:36] Pushing to GitHub (tharr950/fl-dashboards-data/data/score_guarantee.csv)...
+[2026-07-06 06:00:39] Updated existing file.
+[2026-07-06 06:00:39] Fetching sessions...
+[2026-07-06 06:00:41] Fetched 371 sessions rows.
+[2026-07-06 06:00:41] Pushing sessions to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_sessions.csv)...
+[2026-07-06 06:00:44] Updated sessions.
+[2026-07-06 06:00:44] Fetching exams...
+[2026-07-06 06:00:46] Fetched 223 exams rows.
+[2026-07-06 06:00:46] Pushing exams to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_exams.csv)...
+[2026-07-06 06:00:48] Updated exams.
+[2026-07-06 06:00:48] ✅ Done — all 3 datasets synced.
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:240: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g    = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+[2026-07-07 06:00:01] Connecting to MySQL for Score Guarantee...
+[2026-07-07 06:00:33] Fetched 65 rows.
+[2026-07-07 06:00:33] Pushing to GitHub (tharr950/fl-dashboards-data/data/score_guarantee.csv)...
+[2026-07-07 06:00:35] Updated existing file.
+[2026-07-07 06:00:35] Fetching sessions...
+[2026-07-07 06:00:38] Fetched 378 sessions rows.
+[2026-07-07 06:00:38] Pushing sessions to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_sessions.csv)...
+[2026-07-07 06:00:40] Updated sessions.
+[2026-07-07 06:00:40] Fetching exams...
+[2026-07-07 06:00:42] Fetched 232 exams rows.
+[2026-07-07 06:00:42] Pushing exams to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_exams.csv)...
+[2026-07-07 06:00:44] Updated exams.
+[2026-07-07 06:00:44] ✅ Done — all 3 datasets synced.
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:240: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g    = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+[2026-07-08 06:00:01] Connecting to MySQL for Score Guarantee...
+[2026-07-08 06:00:33] Fetched 65 rows.
+[2026-07-08 06:00:33] Pushing to GitHub (tharr950/fl-dashboards-data/data/score_guarantee.csv)...
+[2026-07-08 06:00:35] Updated existing file.
+[2026-07-08 06:00:35] Fetching sessions...
+[2026-07-08 06:00:38] Fetched 387 sessions rows.
+[2026-07-08 06:00:38] Pushing sessions to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_sessions.csv)...
+[2026-07-08 06:00:40] Updated sessions.
+[2026-07-08 06:00:40] Fetching exams...
+[2026-07-08 06:00:42] Fetched 233 exams rows.
+[2026-07-08 06:00:42] Pushing exams to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_exams.csv)...
+[2026-07-08 06:00:44] Updated exams.
+[2026-07-08 06:00:44] ✅ Done — all 3 datasets synced.
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:240: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g    = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+[2026-07-09 06:00:01] Connecting to MySQL for Score Guarantee...
+[2026-07-09 06:00:48] Fetched 65 rows.
+[2026-07-09 06:00:48] Pushing to GitHub (tharr950/fl-dashboards-data/data/score_guarantee.csv)...
+[2026-07-09 06:00:51] Updated existing file.
+[2026-07-09 06:00:51] Fetching sessions...
+[2026-07-09 06:00:54] Fetched 397 sessions rows.
+[2026-07-09 06:00:54] Pushing sessions to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_sessions.csv)...
+[2026-07-09 06:00:56] Updated sessions.
+[2026-07-09 06:00:56] Fetching exams...
+[2026-07-09 06:00:59] Fetched 234 exams rows.
+[2026-07-09 06:00:59] Pushing exams to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_exams.csv)...
+[2026-07-09 06:01:01] Updated exams.
+[2026-07-09 06:01:01] ✅ Done — all 3 datasets synced.
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:240: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g    = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+[2026-07-13 06:00:02] Connecting to MySQL for Score Guarantee...
+[2026-07-13 06:00:48] Fetched 65 rows.
+[2026-07-13 06:00:48] Pushing to GitHub (tharr950/fl-dashboards-data/data/score_guarantee.csv)...
+[2026-07-13 06:00:51] Updated existing file.
+[2026-07-13 06:00:51] Fetching sessions...
+[2026-07-13 06:00:54] Fetched 448 sessions rows.
+[2026-07-13 06:00:54] Pushing sessions to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_sessions.csv)...
+[2026-07-13 06:00:56] Updated sessions.
+[2026-07-13 06:00:56] Fetching exams...
+[2026-07-13 06:01:06] Fetched 237 exams rows.
+[2026-07-13 06:01:06] Pushing exams to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_exams.csv)...
+[2026-07-13 06:01:08] Updated exams.
+[2026-07-13 06:01:08] ✅ Done — all 3 datasets synced.
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:240: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g    = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+/Users/tylerharrington/Desktop/Revolution Prep/DirectorInstruction_Dashboard/sync_score_guarantee.py:429: DeprecationWarning: Argument login_or_token is deprecated, please use auth=github.Auth.Token(...) instead
+  g = Github(GITHUB_TOKEN)
+[2026-07-14 06:00:01] Connecting to MySQL for Score Guarantee...
+[2026-07-14 06:00:37] Fetched 65 rows.
+[2026-07-14 06:00:37] Pushing to GitHub (tharr950/fl-dashboards-data/data/score_guarantee.csv)...
+[2026-07-14 06:00:40] Updated existing file.
+[2026-07-14 06:00:40] Fetching sessions...
+[2026-07-14 06:00:42] Fetched 453 sessions rows.
+[2026-07-14 06:00:42] Pushing sessions to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_sessions.csv)...
+[2026-07-14 06:00:44] Updated sessions.
+[2026-07-14 06:00:44] Fetching exams...
+[2026-07-14 06:00:54] Fetched 243 exams rows.
+[2026-07-14 06:00:54] Pushing exams to GitHub (tharr950/fl-dashboards-data/data/score_guarantee_exams.csv)...
+[2026-07-14 06:00:56] Updated exams.
+[2026-07-14 06:00:56] ✅ Done — all 3 datasets synced.
