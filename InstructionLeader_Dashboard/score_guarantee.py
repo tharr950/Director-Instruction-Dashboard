@@ -1367,14 +1367,25 @@ def render_app(config):
                 stu_sess = df_sg_sessions[df_sg_sessions["student_id"] == sid].copy()
                 stu_sess["starts_at"] = pd.to_datetime(stu_sess["starts_at"], errors="coerce")
                 stu_sess = stu_sess.sort_values("starts_at")
-                sess_display = stu_sess[["starts_at", "session_hours", "attended", "tutor"]].copy()
+                sess_cols = ["starts_at", "session_hours", "attended", "tutor"]
+                if "subjects_covered" in stu_sess.columns:
+                    sess_cols.append("subjects_covered")
+                if "session_notes" in stu_sess.columns:
+                    sess_cols.append("session_notes")
+                sess_display = stu_sess[sess_cols].copy()
                 sess_display["starts_at"] = sess_display["starts_at"].dt.strftime("%Y-%m-%d %I:%M %p")
                 sess_display["attended"] = sess_display["attended"].apply(lambda x: "✅" if x == 1 else "❌")
                 sess_display["session_hours"] = sess_display["session_hours"].round(2)
-                sess_display = sess_display.rename(columns={
+                rename_map = {
                     "starts_at": "Date", "session_hours": "Hours",
                     "attended": "Attended", "tutor": "Tutor",
-                })
+                    "subjects_covered": "Subjects", "session_notes": "Notes",
+                }
+                sess_display = sess_display.rename(columns={k: v for k, v in rename_map.items() if k in sess_display.columns})
+                if "Subjects" in sess_display.columns:
+                    sess_display["Subjects"] = sess_display["Subjects"].fillna("—")
+                if "Notes" in sess_display.columns:
+                    sess_display["Notes"] = sess_display["Notes"].fillna("")
                 st.dataframe(sess_display, hide_index=True, use_container_width=True)
 
                 st.markdown(f"**Total sessions:** {len(stu_sess)} | "
