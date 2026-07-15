@@ -1709,7 +1709,7 @@ def render_app(config):
 
                         highlights.sort(key=lambda x: x[0], reverse=True)
                         for start, end, bg, color in highlights:
-                            safe = safe[:start] + f"<span style=\'background:{bg}; color:{color}; padding:1px 3px; border-radius:3px; font-weight:600;\'>" + safe[start:end] + "</span>" + safe[end:]
+                            safe = safe[:start] + f"<span style=\"background:{bg}; color:{color}; padding:1px 3px; border-radius:3px; font-weight:600;\">" + safe[start:end] + "</span>" + safe[end:]
                         return safe.replace("\n", "<br>")
 
                     # Render updates in expander
