@@ -1507,41 +1507,31 @@ def render_app(config):
 
                     hw_results = []
                     for _, upd in stu_updates.iterrows():
-                        body = str(upd.get("body", "")).lower()
+                        body_raw = str(upd.get("body", ""))
                         date_val = upd["sent_at"].strftime("%Y-%m-%d") if pd.notna(upd.get("sent_at")) else "—"
                         tutor_val = upd.get("tutor", "—")
                         msg_type = upd.get("message_type", "—")
 
-                        hw_mentioned = any(kw in body for kw in hw_keywords)
-                        hw_completed = None
-                        if hw_mentioned:
-                            has_positive = any(kw in body for kw in completion_positive)
-                            has_negative = any(kw in body for kw in completion_negative)
-                            if has_negative:
-                                hw_completed = "❌ Not completed"
-                            elif has_positive:
-                                hw_completed = "✅ Completed"
-                            else:
-                                hw_completed = "📝 Assigned (no status)"
+                        hw_found, hw_status, hw_sents = analyze_homework(
+                            body_raw, hw_keywords, completion_positive, completion_negative
+                        )
 
-                        snippet = ""
-                        if hw_mentioned:
-                            body_orig = str(upd.get("body", ""))
-                            for kw in hw_keywords:
-                                idx = body.find(kw)
-                                if idx >= 0:
-                                    start = max(0, idx - 50)
-                                    end = min(len(body_orig), idx + len(kw) + 150)
-                                    snippet = "..." + body_orig[start:end].strip() + "..."
-                                    break
+                        if hw_found:
+                            if hw_status == "not_completed":
+                                status_str = "❌ Not completed"
+                            elif hw_status == "completed":
+                                status_str = "✅ Completed"
+                            else:
+                                status_str = "📝 Assigned (no status)"
+                        else:
+                            status_str = "—"
 
                         hw_results.append({
                             "Date": date_val,
                             "Type": msg_type,
                             "Tutor": tutor_val,
-                            "HW Mentioned": "✅" if hw_mentioned else "❌",
-                            "Status": hw_completed or "—",
-                            "Snippet": snippet or "—",
+                            "HW Mentioned": "✅" if hw_found else "❌",
+                            "Status": status_str,
                         })
 
                     hw_df = pd.DataFrame(hw_results)
@@ -1599,42 +1589,104 @@ def render_app(config):
                             safe = safe[:start] + f"<span style='background:{bg}; color:{color}; padding:1px 3px; border-radius:3px; font-weight:600;'>" + safe[start:end] + "</span>" + safe[end:]
                         return safe.replace("\n", "<br>")
 
-                    for _, upd in stu_updates.iterrows():
-                        date_val = upd["sent_at"].strftime("%Y-%m-%d") if pd.notna(upd.get("sent_at")) else "—"
-                        tutor_val = upd.get("tutor", "—")
-                        msg_type = upd.get("message_type", "—")
-                        body_raw = str(upd.get("body", ""))
-                        body_lower = body_raw.lower()
-                        hw_found = any(kw in body_lower for kw in hw_keywords)
+                    # Smarter homework detection — sentence-level analysis
+                    def analyze_homework(body_text, hw_kws, pos_kws, neg_kws):
+                        """Analyze body at sentence level for homework context."""
+                        if not body_text or body_text == "nan":
+                            return False, None, []
+                        lower = body_text.lower()
+                        import re as _re
+                        sentences = _re.split(r'[.!?\n]+', lower)
 
-                        if hw_found:
-                            has_neg = any(kw in body_lower for kw in completion_negative)
-                            has_pos = any(kw in body_lower for kw in completion_positive)
-                            if has_neg:
-                                border = "#fecaca"
-                                badge = "<span style='background:#fef2f2; color:#991b1b; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;'>❌ HW Not Completed</span>"
-                            elif has_pos:
-                                border = "#bbf7d0"
-                                badge = "<span style='background:#f0fdf4; color:#166534; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;'>✅ HW Completed</span>"
+                        # Assignment context words — keyword must appear near these
+                        assign_context = ["assign", "this week", "next week", "weekend",
+                                          "before our", "complete", "work on", "practice",
+                                          "please", "should", "need to", "will be", "includes",
+                                          "i want you", "i'd like you", "try to", "make sure"]
+
+                        hw_sentences = []
+                        has_hw = False
+                        completed = None
+
+                        for sent in sentences:
+                            sent = sent.strip()
+                            if not sent:
+                                continue
+
+                            # Check for core homework keywords (not "practice exam" alone)
+                            core_hw = ["homework", "hw ", "home work", "assignment",
+                                       "worksheet", "workbook", "independent practice",
+                                       "practice at home", "work at home"]
+                            # Contextual keywords — only count if in assignment context
+                            contextual_hw = ["practice test", "practice exam", "bluebook",
+                                             "khan academy", "khan", "practice section",
+                                             "practice problems"]
+
+                            has_core = any(kw in sent for kw in core_hw)
+                            has_contextual = any(kw in sent for kw in contextual_hw)
+                            has_context = any(ctx in sent for ctx in assign_context)
+
+                            if has_core or (has_contextual and has_context):
+                                has_hw = True
+                                # Check completion in this sentence
+                                has_neg = any(kw in sent for kw in neg_kws)
+                                has_pos = any(kw in sent for kw in pos_kws)
+                                # Also check for praise patterns indicating completion
+                                praise = any(p in sent for p in [
+                                    "great job", "incredible job", "nice work",
+                                    "well done", "excellent", "good job",
+                                    "did a great", "did an amazing", "did an incredible",
+                                    "did a wonderful", "did a fantastic",
+                                    "all of the", "all the", "every"])
+                                if has_neg:
+                                    completed = "not_completed"
+                                elif has_pos or (praise and has_core):
+                                    if completed != "not_completed":
+                                        completed = "completed"
+                                elif completed is None:
+                                    completed = "assigned"
+                                hw_sentences.append(sent)
+
+                        return has_hw, completed, hw_sentences
+
+                    # Render updates in expander
+                    with st.expander(f"📄 View All Updates ({len(stu_updates)})", expanded=False):
+                        for _, upd in stu_updates.iterrows():
+                            date_val = upd["sent_at"].strftime("%Y-%m-%d") if pd.notna(upd.get("sent_at")) else "—"
+                            tutor_val = upd.get("tutor", "—")
+                            msg_type = upd.get("message_type", "—")
+                            body_raw = str(upd.get("body", ""))
+
+                            hw_found, hw_status, hw_sents = analyze_homework(
+                                body_raw, hw_keywords, completion_positive, completion_negative
+                            )
+
+                            if hw_found:
+                                if hw_status == "not_completed":
+                                    border = "#fecaca"
+                                    badge = "<span style='background:#fef2f2; color:#991b1b; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;'>❌ HW Not Completed</span>"
+                                elif hw_status == "completed":
+                                    border = "#bbf7d0"
+                                    badge = "<span style='background:#f0fdf4; color:#166534; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;'>✅ HW Completed</span>"
+                                else:
+                                    border = "#fde68a"
+                                    badge = "<span style='background:#fffbeb; color:#854d0e; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;'>📝 HW Assigned</span>"
                             else:
-                                border = "#fde68a"
-                                badge = "<span style='background:#fffbeb; color:#854d0e; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;'>📝 HW Assigned</span>"
-                        else:
-                            border = "#e2e8f0"
-                            badge = "<span style='background:#f1f5f9; color:#64748b; padding:2px 8px; border-radius:4px; font-size:0.75rem;'>No HW mention</span>"
+                                border = "#e2e8f0"
+                                badge = "<span style='background:#f1f5f9; color:#64748b; padding:2px 8px; border-radius:4px; font-size:0.75rem;'>No HW mention</span>"
 
-                        highlighted = highlight_body(body_raw, hw_keywords, completion_positive, completion_negative)
+                            highlighted = highlight_body(body_raw, hw_keywords, completion_positive, completion_negative)
 
-                        st.markdown(
-                            f"<div style='border:1px solid {border}; border-radius:8px; padding:12px 16px; margin:8px 0;'>"
-                            f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>"
-                            f"<span style='font-weight:600; color:#1e293b;'>{date_val} — {tutor_val}</span>"
-                            f"<span>{badge} <span style='color:#94a3b8; font-size:0.75rem; margin-left:8px;'>{msg_type}</span></span>"
-                            f"</div>"
-                            f"<div style='font-size:0.82rem; color:#374151; line-height:1.5;'>{highlighted}</div>"
-                            f"</div>",
-                            unsafe_allow_html=True,
-                        )
+                            st.markdown(
+                                f"<div style='border:1px solid {border}; border-radius:8px; padding:12px 16px; margin:8px 0;'>"
+                                f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>"
+                                f"<span style='font-weight:600; color:#1e293b;'>{date_val} — {tutor_val}</span>"
+                                f"<span>{badge} <span style='color:#94a3b8; font-size:0.75rem; margin-left:8px;'>{msg_type}</span></span>"
+                                f"</div>"
+                                f"<div style='font-size:0.82rem; color:#374151; line-height:1.5;'>{highlighted}</div>"
+                                f"</div>",
+                                unsafe_allow_html=True,
+                            )
                 else:
                     st.info("No parent/progress updates found for this student.")
             else:
