@@ -1505,6 +1505,66 @@ def render_app(config):
                                            "incomplete", "not completed", "didn't finish",
                                            "did not finish", "hasn't finished", "skipped"]
 
+                    # Smarter homework detection — sentence-level analysis
+                    def analyze_homework(body_text, hw_kws, pos_kws, neg_kws):
+                        """Analyze body at sentence level for homework context."""
+                        if not body_text or body_text == "nan":
+                            return False, None, []
+                        lower = body_text.lower()
+                        import re as _re
+                        sentences = _re.split(r'[.!?\n]+', lower)
+
+                        # Assignment context words — keyword must appear near these
+                        assign_context = ["assign", "this week", "next week", "weekend",
+                                          "before our", "complete", "work on", "practice",
+                                          "please", "should", "need to", "will be", "includes",
+                                          "i want you", "i'd like you", "try to", "make sure"]
+
+                        hw_sentences = []
+                        has_hw = False
+                        completed = None
+
+                        for sent in sentences:
+                            sent = sent.strip()
+                            if not sent:
+                                continue
+
+                            # Check for core homework keywords (not "practice exam" alone)
+                            core_hw = ["homework", "hw ", "home work", "assignment",
+                                       "worksheet", "workbook", "independent practice",
+                                       "practice at home", "work at home"]
+                            # Contextual keywords — only count if in assignment context
+                            contextual_hw = ["practice test", "practice exam", "bluebook",
+                                             "khan academy", "khan", "practice section",
+                                             "practice problems"]
+
+                            has_core = any(kw in sent for kw in core_hw)
+                            has_contextual = any(kw in sent for kw in contextual_hw)
+                            has_context = any(ctx in sent for ctx in assign_context)
+
+                            if has_core or (has_contextual and has_context):
+                                has_hw = True
+                                # Check completion in this sentence
+                                has_neg = any(kw in sent for kw in neg_kws)
+                                has_pos = any(kw in sent for kw in pos_kws)
+                                # Also check for praise patterns indicating completion
+                                praise = any(p in sent for p in [
+                                    "great job", "incredible job", "nice work",
+                                    "well done", "excellent", "good job",
+                                    "did a great", "did an amazing", "did an incredible",
+                                    "did a wonderful", "did a fantastic",
+                                    "all of the", "all the", "every"])
+                                if has_neg:
+                                    completed = "not_completed"
+                                elif has_pos or (praise and has_core):
+                                    if completed != "not_completed":
+                                        completed = "completed"
+                                elif completed is None:
+                                    completed = "assigned"
+                                hw_sentences.append(sent)
+
+                        return has_hw, completed, hw_sentences
+
                     hw_results = []
                     for _, upd in stu_updates.iterrows():
                         body_raw = str(upd.get("body", ""))
@@ -1588,66 +1648,6 @@ def render_app(config):
                         for start, end, bg, color in highlights:
                             safe = safe[:start] + f"<span style='background:{bg}; color:{color}; padding:1px 3px; border-radius:3px; font-weight:600;'>" + safe[start:end] + "</span>" + safe[end:]
                         return safe.replace("\n", "<br>")
-
-                    # Smarter homework detection — sentence-level analysis
-                    def analyze_homework(body_text, hw_kws, pos_kws, neg_kws):
-                        """Analyze body at sentence level for homework context."""
-                        if not body_text or body_text == "nan":
-                            return False, None, []
-                        lower = body_text.lower()
-                        import re as _re
-                        sentences = _re.split(r'[.!?\n]+', lower)
-
-                        # Assignment context words — keyword must appear near these
-                        assign_context = ["assign", "this week", "next week", "weekend",
-                                          "before our", "complete", "work on", "practice",
-                                          "please", "should", "need to", "will be", "includes",
-                                          "i want you", "i'd like you", "try to", "make sure"]
-
-                        hw_sentences = []
-                        has_hw = False
-                        completed = None
-
-                        for sent in sentences:
-                            sent = sent.strip()
-                            if not sent:
-                                continue
-
-                            # Check for core homework keywords (not "practice exam" alone)
-                            core_hw = ["homework", "hw ", "home work", "assignment",
-                                       "worksheet", "workbook", "independent practice",
-                                       "practice at home", "work at home"]
-                            # Contextual keywords — only count if in assignment context
-                            contextual_hw = ["practice test", "practice exam", "bluebook",
-                                             "khan academy", "khan", "practice section",
-                                             "practice problems"]
-
-                            has_core = any(kw in sent for kw in core_hw)
-                            has_contextual = any(kw in sent for kw in contextual_hw)
-                            has_context = any(ctx in sent for ctx in assign_context)
-
-                            if has_core or (has_contextual and has_context):
-                                has_hw = True
-                                # Check completion in this sentence
-                                has_neg = any(kw in sent for kw in neg_kws)
-                                has_pos = any(kw in sent for kw in pos_kws)
-                                # Also check for praise patterns indicating completion
-                                praise = any(p in sent for p in [
-                                    "great job", "incredible job", "nice work",
-                                    "well done", "excellent", "good job",
-                                    "did a great", "did an amazing", "did an incredible",
-                                    "did a wonderful", "did a fantastic",
-                                    "all of the", "all the", "every"])
-                                if has_neg:
-                                    completed = "not_completed"
-                                elif has_pos or (praise and has_core):
-                                    if completed != "not_completed":
-                                        completed = "completed"
-                                elif completed is None:
-                                    completed = "assigned"
-                                hw_sentences.append(sent)
-
-                        return has_hw, completed, hw_sentences
 
                     # Render updates in expander
                     with st.expander(f"📄 View All Updates ({len(stu_updates)})", expanded=False):
