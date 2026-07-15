@@ -1612,8 +1612,8 @@ def render_app(config):
                     def highlight_body(body_text, hw_kws, pos_kws, neg_kws):
                         if not body_text or body_text == "nan":
                             return ""
-                        safe = _html.escape(str(body_text))
-                        lower = safe.lower()
+                        text = str(body_text)
+                        lower = text.lower()
 
                         core_hw = ["homework", "home work", "assignment", "worksheet",
                                    "workbook", "independent practice", "practice at home",
@@ -1637,71 +1637,65 @@ def render_app(config):
 
                         highlights = []
 
-                        # Red — negative completion
                         for kw in all_neg:
                             idx = 0
                             while True:
                                 idx = lower.find(kw, idx)
-                                if idx == -1:
-                                    break
-                                highlights.append((idx, idx + len(kw), "#fecaca", "#991b1b"))
+                                if idx == -1: break
+                                highlights.append((idx, idx + len(kw), "red"))
                                 idx += len(kw)
 
-                        # Green — positive completion/praise ONLY near (within 200 chars) a core hw word
-                        core_positions = []
+                        core_pos = []
                         for kw in core_hw:
                             idx = 0
                             while True:
                                 idx = lower.find(kw, idx)
-                                if idx == -1:
-                                    break
-                                core_positions.append(idx)
+                                if idx == -1: break
+                                core_pos.append(idx)
                                 idx += len(kw)
 
                         for kw in all_pos:
                             idx = 0
                             while True:
                                 idx = lower.find(kw, idx)
-                                if idx == -1:
-                                    break
-                                near_hw = any(abs(idx - cp) < 200 for cp in core_positions)
-                                if near_hw:
-                                    already = any(s <= idx < e for s, e, _, _ in highlights)
-                                    if not already:
-                                        highlights.append((idx, idx + len(kw), "#dcfce7", "#166534"))
+                                if idx == -1: break
+                                if any(abs(idx - cp) < 200 for cp in core_pos):
+                                    if not any(s <= idx < e for s, e, _ in highlights):
+                                        highlights.append((idx, idx + len(kw), "green"))
                                 idx += len(kw)
 
-                        # Yellow — core hw always
                         for kw in core_hw:
                             idx = 0
                             while True:
                                 idx = lower.find(kw, idx)
-                                if idx == -1:
-                                    break
-                                already = any(s <= idx < e for s, e, _, _ in highlights)
-                                if not already:
-                                    highlights.append((idx, idx + len(kw), "#fef9c3", "#854d0e"))
+                                if idx == -1: break
+                                if not any(s <= idx < e for s, e, _ in highlights):
+                                    highlights.append((idx, idx + len(kw), "yellow"))
                                 idx += len(kw)
 
-                        # Yellow — contextual hw ONLY if assignment context within 200 chars
                         for kw in contextual_hw:
                             idx = 0
                             while True:
                                 idx = lower.find(kw, idx)
-                                if idx == -1:
-                                    break
-                                nearby_text = lower[max(0, idx-200):idx+len(kw)+200]
-                                has_ctx = any(ctx in nearby_text for ctx in assign_ctx)
-                                if has_ctx:
-                                    already = any(s <= idx < e for s, e, _, _ in highlights)
-                                    if not already:
-                                        highlights.append((idx, idx + len(kw), "#fef9c3", "#854d0e"))
+                                if idx == -1: break
+                                nearby = lower[max(0, idx-200):idx+len(kw)+200]
+                                if any(ctx in nearby for ctx in assign_ctx):
+                                    if not any(s <= idx < e for s, e, _ in highlights):
+                                        highlights.append((idx, idx + len(kw), "yellow"))
                                 idx += len(kw)
 
+                        color_map = {
+                            "red": ("background:#fecaca; color:#991b1b"),
+                            "green": ("background:#dcfce7; color:#166534"),
+                            "yellow": ("background:#fef9c3; color:#854d0e"),
+                        }
+
                         highlights.sort(key=lambda x: x[0], reverse=True)
-                        for start, end, bg, color in highlights:
-                            safe = safe[:start] + f'<span style="background:{bg}; color:{color}; padding:1px 3px; border-radius:3px; font-weight:600;">' + safe[start:end] + "</span>" + safe[end:]
-                        return safe.replace("\n", "<br>")
+                        for s, e, c in highlights:
+                            style = color_map[c]
+                            tag_open = '<mark style="' + style + '; padding:1px 3px; border-radius:3px; font-weight:600;">'
+                            text = text[:s] + tag_open + text[s:e] + "</mark>" + text[e:]
+                        return text.replace("\n", "<br>")
 
                     # Render updates in expander
                     with st.expander(f"📄 View All Updates ({len(stu_updates)})", expanded=False):
