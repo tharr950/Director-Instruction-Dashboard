@@ -254,7 +254,7 @@ def render_app(config):
         st.markdown(
             "<p style='font-family: Source Serif 4, serif; font-size:1.4rem; "
             "color:#1e293b; margin-bottom:0;'>Score Guarantee</p>"
-            "<p style='color:#64748b; font-size:0.8rem; margin-top:0;'>Compliance Tracker</p>",
+            "<p style='color:#64748b; font-size:0.8rem; margin-top:0;'>Compliance Tracker — v2</p>",
             unsafe_allow_html=True,
         )
         st.divider()
