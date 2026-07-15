@@ -254,7 +254,7 @@ def render_app(config):
         st.markdown(
             "<p style='font-family: Source Serif 4, serif; font-size:1.4rem; "
             "color:#1e293b; margin-bottom:0;'>Score Guarantee</p>"
-            "<p style='color:#64748b; font-size:0.8rem; margin-top:0;'>Compliance Tracker — v2</p>",
+            "<p style='color:#64748b; font-size:0.8rem; margin-top:0;'>Compliance Tracker</p>",
             unsafe_allow_html=True,
         )
         st.divider()
@@ -1612,40 +1612,33 @@ def render_app(config):
                     def highlight_body(body_text, hw_kws, pos_kws, neg_kws):
                         if not body_text or body_text == "nan":
                             return ""
-                        import re as _re
-                        safe = _html.escape(body_text)
+                        safe = _html.escape(str(body_text))
                         lower = safe.lower()
 
-                        # Core hw keywords — always highlight
-                        core_hw = ["homework", "hw ", "home work", "assignment",
-                                   "worksheet", "workbook", "independent practice",
-                                   "practice at home", "work at home"]
-                        # Contextual — only highlight near assignment context
+                        core_hw = ["homework", "home work", "assignment", "worksheet",
+                                   "workbook", "independent practice", "practice at home",
+                                   "work at home"]
                         contextual_hw = ["practice test", "practice exam", "bluebook",
-                                         "khan academy", "khan", "practice section",
-                                         "practice problems"]
-                        assign_context = ["assign", "this week", "next week", "weekend",
-                                          "before our", "complete", "work on",
-                                          "please", "should", "need to", "will be", "includes",
-                                          "i want you", "i\'d like you", "try to", "make sure"]
-                        # Praise patterns that indicate completion
-                        praise = ["great job", "incredible job", "nice work",
-                                  "well done", "excellent", "good job",
-                                  "did a great", "did an amazing", "did an incredible",
-                                  "did a wonderful", "did a fantastic"]
-
-                        # Split into sentences for context checking
-                        sentences = _re.split(r'[.!?\n]+', lower)
-                        sent_boundaries = []
-                        pos = 0
-                        for sent in _re.split(r'[.!?\n]+', safe):
-                            sent_boundaries.append((pos, pos + len(sent)))
-                            pos += len(sent) + 1
+                                         "khan academy", "practice section", "practice problems"]
+                        assign_ctx = ["assign", "this week", "next week", "weekend",
+                                      "before our", "complete", "work on", "please",
+                                      "should", "need to", "will be", "includes"]
+                        praise = ["great job", "incredible job", "nice work", "well done",
+                                  "excellent work", "good job", "did a great", "did an amazing",
+                                  "did an incredible", "did a wonderful", "did a fantastic"]
+                        all_neg = ["did not complete", "didn't complete", "hasn't completed",
+                                   "has not completed", "didn't do", "did not do",
+                                   "hasn't done", "has not done", "forgot", "missing",
+                                   "incomplete", "not completed", "didn't finish",
+                                   "did not finish", "hasn't finished", "skipped"]
+                        all_pos = ["completed", "finished", "did the", "did his", "did her",
+                                   "turned in", "submitted", "done with", "worked on",
+                                   "completed all"] + praise
 
                         highlights = []
 
-                        # Red — completion negative (always highlight)
-                        for kw in neg_kws:
+                        # Red — negative completion
+                        for kw in all_neg:
                             idx = 0
                             while True:
                                 idx = lower.find(kw, idx)
@@ -1654,28 +1647,31 @@ def render_app(config):
                                 highlights.append((idx, idx + len(kw), "#fecaca", "#991b1b"))
                                 idx += len(kw)
 
-                        # Green — completion positive AND praise near hw keywords
-                        for kw in pos_kws + praise:
+                        # Green — positive completion/praise ONLY near (within 200 chars) a core hw word
+                        core_positions = []
+                        for kw in core_hw:
                             idx = 0
                             while True:
                                 idx = lower.find(kw, idx)
                                 if idx == -1:
                                     break
-                                # Only highlight if in a sentence with a hw keyword
-                                in_hw_sent = False
-                                for s_start, s_end in sent_boundaries:
-                                    if s_start <= idx < s_end:
-                                        sent_text = lower[s_start:s_end]
-                                        if any(hw in sent_text for hw in core_hw):
-                                            in_hw_sent = True
-                                        break
-                                if in_hw_sent:
+                                core_positions.append(idx)
+                                idx += len(kw)
+
+                        for kw in all_pos:
+                            idx = 0
+                            while True:
+                                idx = lower.find(kw, idx)
+                                if idx == -1:
+                                    break
+                                near_hw = any(abs(idx - cp) < 200 for cp in core_positions)
+                                if near_hw:
                                     already = any(s <= idx < e for s, e, _, _ in highlights)
                                     if not already:
                                         highlights.append((idx, idx + len(kw), "#dcfce7", "#166534"))
                                 idx += len(kw)
 
-                        # Yellow — core hw keywords always, contextual only near context
+                        # Yellow — core hw always
                         for kw in core_hw:
                             idx = 0
                             while True:
@@ -1687,21 +1683,16 @@ def render_app(config):
                                     highlights.append((idx, idx + len(kw), "#fef9c3", "#854d0e"))
                                 idx += len(kw)
 
+                        # Yellow — contextual hw ONLY if assignment context within 200 chars
                         for kw in contextual_hw:
                             idx = 0
                             while True:
                                 idx = lower.find(kw, idx)
                                 if idx == -1:
                                     break
-                                # Only highlight if sentence has assignment context
-                                in_context = False
-                                for s_start, s_end in sent_boundaries:
-                                    if s_start <= idx < s_end:
-                                        sent_text = lower[s_start:s_end]
-                                        if any(ctx in sent_text for ctx in assign_context):
-                                            in_context = True
-                                        break
-                                if in_context:
+                                nearby_text = lower[max(0, idx-200):idx+len(kw)+200]
+                                has_ctx = any(ctx in nearby_text for ctx in assign_ctx)
+                                if has_ctx:
                                     already = any(s <= idx < e for s, e, _, _ in highlights)
                                     if not already:
                                         highlights.append((idx, idx + len(kw), "#fef9c3", "#854d0e"))
@@ -1709,7 +1700,7 @@ def render_app(config):
 
                         highlights.sort(key=lambda x: x[0], reverse=True)
                         for start, end, bg, color in highlights:
-                            safe = safe[:start] + f"<span style=\"background:{bg}; color:{color}; padding:1px 3px; border-radius:3px; font-weight:600;\">" + safe[start:end] + "</span>" + safe[end:]
+                            safe = safe[:start] + f'<span style="background:{bg}; color:{color}; padding:1px 3px; border-radius:3px; font-weight:600;">' + safe[start:end] + "</span>" + safe[end:]
                         return safe.replace("\n", "<br>")
 
                     # Render updates in expander
