@@ -1616,8 +1616,7 @@ def render_app(config):
                         lower = text.lower()
 
                         core_hw = ["homework", "home work", "assignment", "worksheet",
-                                   "workbook", "independent practice", "practice at home",
-                                   "work at home"]
+                                   "workbook", "independent practice", "practice at home"]
                         contextual_hw = ["practice test", "practice exam", "bluebook",
                                          "khan academy", "practice section", "practice problems"]
                         assign_ctx = ["assign", "this week", "next week", "weekend",
@@ -1626,76 +1625,97 @@ def render_app(config):
                         praise = ["great job", "incredible job", "nice work", "well done",
                                   "excellent work", "good job", "did a great", "did an amazing",
                                   "did an incredible", "did a wonderful", "did a fantastic"]
-                        all_neg = ["did not complete", "didn't complete", "hasn't completed",
-                                   "has not completed", "didn't do", "did not do",
-                                   "hasn't done", "has not done", "forgot", "missing",
-                                   "incomplete", "not completed", "didn't finish",
-                                   "did not finish", "hasn't finished", "skipped"]
+                        all_neg = ["did not complete", "didn\'t complete", "hasn\'t completed",
+                                   "has not completed", "didn\'t do", "did not do",
+                                   "hasn\'t done", "has not done", "forgot", "missing",
+                                   "incomplete", "not completed", "didn\'t finish",
+                                   "did not finish", "hasn\'t finished", "skipped"]
                         all_pos = ["completed", "finished", "did the", "did his", "did her",
                                    "turned in", "submitted", "done with", "worked on",
                                    "completed all"] + praise
 
-                        highlights = []
+                        # Collect (start, end, color) — no overlaps
+                        marks = []
+                        used = set()
 
+                        def add_mark(s, e, c):
+                            for pos in range(s, e):
+                                if pos in used:
+                                    return
+                            marks.append((s, e, c))
+                            for pos in range(s, e):
+                                used.add(pos)
+
+                        # Red first
                         for kw in all_neg:
-                            idx = 0
+                            i = 0
                             while True:
-                                idx = lower.find(kw, idx)
-                                if idx == -1: break
-                                highlights.append((idx, idx + len(kw), "red"))
-                                idx += len(kw)
+                                i = lower.find(kw, i)
+                                if i == -1: break
+                                add_mark(i, i + len(kw), "r")
+                                i += len(kw)
 
-                        core_pos = []
+                        # Green — only near core hw
+                        core_locs = []
                         for kw in core_hw:
-                            idx = 0
+                            i = 0
                             while True:
-                                idx = lower.find(kw, idx)
-                                if idx == -1: break
-                                core_pos.append(idx)
-                                idx += len(kw)
+                                i = lower.find(kw, i)
+                                if i == -1: break
+                                core_locs.append(i)
+                                i += len(kw)
 
                         for kw in all_pos:
-                            idx = 0
+                            i = 0
                             while True:
-                                idx = lower.find(kw, idx)
-                                if idx == -1: break
-                                if any(abs(idx - cp) < 200 for cp in core_pos):
-                                    if not any(s <= idx < e for s, e, _ in highlights):
-                                        highlights.append((idx, idx + len(kw), "green"))
-                                idx += len(kw)
+                                i = lower.find(kw, i)
+                                if i == -1: break
+                                if any(abs(i - cp) < 200 for cp in core_locs):
+                                    add_mark(i, i + len(kw), "g")
+                                i += len(kw)
 
+                        # Yellow — core always
                         for kw in core_hw:
-                            idx = 0
+                            i = 0
                             while True:
-                                idx = lower.find(kw, idx)
-                                if idx == -1: break
-                                if not any(s <= idx < e for s, e, _ in highlights):
-                                    highlights.append((idx, idx + len(kw), "yellow"))
-                                idx += len(kw)
+                                i = lower.find(kw, i)
+                                if i == -1: break
+                                add_mark(i, i + len(kw), "y")
+                                i += len(kw)
 
+                        # Yellow — contextual only near assign context
                         for kw in contextual_hw:
-                            idx = 0
+                            i = 0
                             while True:
-                                idx = lower.find(kw, idx)
-                                if idx == -1: break
-                                nearby = lower[max(0, idx-200):idx+len(kw)+200]
-                                if any(ctx in nearby for ctx in assign_ctx):
-                                    if not any(s <= idx < e for s, e, _ in highlights):
-                                        highlights.append((idx, idx + len(kw), "yellow"))
-                                idx += len(kw)
+                                i = lower.find(kw, i)
+                                if i == -1: break
+                                window = lower[max(0,i-200):i+len(kw)+200]
+                                if any(ctx in window for ctx in assign_ctx):
+                                    add_mark(i, i + len(kw), "y")
+                                i += len(kw)
 
-                        color_map = {
-                            "red": ("background:#fecaca; color:#991b1b"),
-                            "green": ("background:#dcfce7; color:#166534"),
-                            "yellow": ("background:#fef9c3; color:#854d0e"),
+                        if not marks:
+                            return text.replace("\n", "<br>")
+
+                        # Build output by walking through text
+                        styles = {
+                            "r": "background-color:#fecaca;color:#991b1b;padding:1px 3px;border-radius:3px;font-weight:600",
+                            "g": "background-color:#dcfce7;color:#166534;padding:1px 3px;border-radius:3px;font-weight:600",
+                            "y": "background-color:#fef9c3;color:#854d0e;padding:1px 3px;border-radius:3px;font-weight:600",
                         }
-
-                        highlights.sort(key=lambda x: x[0], reverse=True)
-                        for s, e, c in highlights:
-                            style = color_map[c]
-                            tag_open = '<mark style="' + style + '; padding:1px 3px; border-radius:3px; font-weight:600;">'
-                            text = text[:s] + tag_open + text[s:e] + "</mark>" + text[e:]
-                        return text.replace("\n", "<br>")
+                        marks.sort(key=lambda x: x[0])
+                        parts = []
+                        pos = 0
+                        for s, e, c in marks:
+                            if s > pos:
+                                parts.append(text[pos:s])
+                            sty = styles[c]
+                            parts.append('<span style="' + sty + '">' + text[s:e] + '</span>')
+                            pos = e
+                        if pos < len(text):
+                            parts.append(text[pos:])
+                        result = "".join(parts)
+                        return result.replace("\n", "<br>")
 
                     # Render updates in expander
                     with st.expander(f"📄 View All Updates ({len(stu_updates)})", expanded=False):
