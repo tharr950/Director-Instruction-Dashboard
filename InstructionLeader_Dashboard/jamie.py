@@ -193,6 +193,87 @@ def render_app(config):
 
 
     @st.cache_data(ttl=3600)
+    @st.cache_data(ttl=3600)
+    def load_prep_time(lookback_weeks=12):
+        today = date.today()
+        from datetime import timedelta
+        day_end = today - timedelta(days=today.weekday() + 1)
+        day_start = day_end - timedelta(weeks=lookback_weeks) + timedelta(days=1)
+        query = f"""
+        WITH time_period AS (
+          SELECT '{day_start.strftime("%Y-%m-%d")}'::date AS day_start,
+                 '{day_end.strftime("%Y-%m-%d")}'::date AS day_end
+        ),
+        cte_prep1 AS (
+            SELECT employees.id AS tutor_id, sessions.starts_at,
+                brands.name AS category,
+                CASE WHEN sessions.attendances_attended_count = 0
+                    THEN 'Unattended Session' ELSE 'Attended Session' END AS type,
+                sessions.duration/60.0 AS duration_hours,
+                dates.first_day_of_week_sunday_start AS week_of
+            FROM dw.sessions
+                JOIN rp_bi.dates ON (DATEPART(year,sessions.starts_at) = dates.year
+                    AND DATEPART(month,sessions.starts_at) = dates.month
+                    AND DATEPART(day,sessions.starts_at) = dates.day)
+                JOIN dw.courses ON sessions.course_id = courses.id
+                JOIN dw.brands ON courses.brand_id = brands.id
+                JOIN dw.employees ON sessions.supervisor_id = employees.id
+            WHERE dates.first_day_of_week_sunday_start >= (SELECT day_start FROM time_period)
+                AND dates.first_day_of_week_sunday_start <= (SELECT day_end FROM time_period)
+            UNION
+            SELECT employees.id AS tutor_id, events.starts_at,
+                events.category AS category,
+                replace(events.type,'Event::','') AS type,
+                events.duration/60.0 AS duration_hours,
+                dates.first_day_of_week_sunday_start AS week_of
+            FROM dw.events
+                JOIN rp_bi.dates ON (DATEPART(year,events.starts_at) = dates.year
+                    AND DATEPART(month,events.starts_at) = dates.month
+                    AND DATEPART(day,events.starts_at) = dates.day)
+                JOIN dw.employees ON (events.attendee_id = employees.id
+                    AND events.attendee_type = 'Employee')
+            WHERE dates.first_day_of_week_sunday_start >= (SELECT day_start FROM time_period)
+                AND dates.first_day_of_week_sunday_start <= (SELECT day_end FROM time_period)
+                AND events.category IN ('Session Preparation', 'Email or Slack Communication')
+        ),
+        cte_prep2 AS (
+            SELECT cte_prep1.tutor_id, cte_prep1.week_of,
+                CASE WHEN cte_prep1.type = 'PrepTime' THEN SUM(cte_prep1.duration_hours) END AS session_and_email_prep,
+                CASE WHEN cte_prep1.type = 'Unattended Session' THEN SUM(cte_prep1.duration_hours) END AS unattended_sessions,
+                CASE WHEN cte_prep1.type = 'Attended Session' THEN SUM(cte_prep1.duration_hours) END AS attended_sessions
+            FROM cte_prep1 GROUP BY cte_prep1.tutor_id, cte_prep1.week_of, cte_prep1.type
+        )
+        SELECT DISTINCT employees.id AS tutor_id,
+            tutor_users.first_name||' '||tutor_users.last_name AS tutor_name,
+            tiers.name AS tier,
+            manager_users.first_name||' '||manager_users.last_name AS fl,
+            date(employees.hire_date) AS hire_date,
+            employees.delivery_target,
+            cte_prep2.week_of,
+            MAX(cte_prep2.attended_sessions) AS attended_sessions,
+            MAX(cte_prep2.session_and_email_prep) AS session_and_email_prep,
+            MAX(cte_prep2.unattended_sessions) AS unattended_sessions
+        FROM dw.employees
+            JOIN dw.users tutor_users ON employees.user_id = tutor_users.id
+            JOIN dw.tiers ON employees.tier_id = tiers.id
+            JOIN dw.team_members ON employees.id = team_members.member_id
+            JOIN dw.teams ON team_members.team_id = teams.id
+            JOIN dw.employees managers ON teams.manager_id = managers.id
+            JOIN dw.users manager_users ON managers.user_id = manager_users.id
+            LEFT JOIN cte_prep2 ON employees.id = cte_prep2.tutor_id
+        WHERE employees.end_date IS NULL AND employees.delivery_target > 0
+            AND employees.type = 'Tutor' AND tutor_users.title = 'Tutor'
+        GROUP BY employees.id, tutor_name, tiers.name, fl, employees.hire_date,
+                 employees.delivery_target, cte_prep2.week_of
+        ORDER BY tutor_name
+        """
+        conn = get_redshift_connection()
+        df = pd.read_sql(query, conn)
+        df["week_of"] = pd.to_datetime(df["week_of"], errors="coerce")
+        for col in ["attended_sessions", "session_and_email_prep", "unattended_sessions"]:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        return df
+
     def load_restricted_data():
         today = date.today()
         lookback_start = (today - pd.DateOffset(years=1)).strftime("%Y-%m-%d")
@@ -428,6 +509,7 @@ def render_app(config):
     try:
         df = load_team_data()
         df_meetings = load_meeting_data()
+        df_prep = load_prep_time()
         df_restricted = load_restricted_data()
         df_kpi = load_dashboard_metrics()
         df_sg = load_score_guarantee()
@@ -466,6 +548,7 @@ def render_app(config):
             "🔀 BUC / PT Split",
             "🚫 Restricted Status",
             "📅 Meetings",
+            "⏱️ Prep Time",
             "📈 KPI Comparison",
             "🎯 Score Guarantee",
             "📋 Full Roster",
@@ -1317,6 +1400,136 @@ def render_app(config):
         st.dataframe(mtg_display, hide_index=True, use_container_width=True,
                      height=min(600, len(mtg_display) * 35 + 60))
 
+
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAGE — PREP TIME
+    # ══════════════════════════════════════════════════════════════════════════
+    elif page == "⏱️ Prep Time":
+        st.markdown(
+            "<p class='section-label'>Session & Prep Hours</p>"
+            "<p class='section-title'>Attended, Unattended & Prep Time</p>",
+            unsafe_allow_html=True,
+        )
+
+        prep_range = {"Past 4 Weeks": 4, "Past 8 Weeks": 8, "Past 12 Weeks": 12}
+        sel_prep_range = st.selectbox("Date Range", list(prep_range.keys()), index=2, key="prep_range")
+        sel_prep_weeks = prep_range[sel_prep_range]
+        prep_data = load_prep_time(lookback_weeks=sel_prep_weeks)
+        prep = prep_data[prep_data["fl"].isin(selected_managers)].copy()
+
+        from datetime import timedelta
+        range_end = date.today() - timedelta(days=date.today().weekday() + 1)
+        range_start = range_end - timedelta(weeks=sel_prep_weeks) + timedelta(days=1)
+        st.markdown(
+            f"<p style='color:#64748b; font-size:0.82rem; margin-top:-12px;'>"
+            f"Showing data from {range_start.strftime('%B %d, %Y')} to {range_end.strftime('%B %d, %Y')}</p>",
+            unsafe_allow_html=True,
+        )
+
+        tutor_summary = (
+            prep.groupby(["tutor_name", "fl", "tier", "delivery_target"])
+            .agg(attended=("attended_sessions", "sum"), prep=("session_and_email_prep", "sum"),
+                 unattended=("unattended_sessions", "sum"))
+            .reset_index().sort_values("tutor_name")
+        )
+        for c in ["attended", "prep", "unattended"]:
+            tutor_summary[c] = tutor_summary[c].round(1)
+        tutor_summary["total"] = (tutor_summary["attended"] + tutor_summary["prep"] + tutor_summary["unattended"]).round(1)
+
+        pm1, pm2, pm3, pm4 = st.columns(4)
+        pm1.metric("Avg Attended Hrs", f"{tutor_summary['attended'].mean():.1f}")
+        pm2.metric("Avg Prep Hrs", f"{tutor_summary['prep'].mean():.1f}")
+        pm3.metric("Avg Unattended Hrs", f"{tutor_summary['unattended'].mean():.1f}")
+        pm4.metric("Total Tutors", len(tutor_summary))
+
+        st.markdown("")
+        st.markdown(
+            "<p class='section-label'>By Faculty Leader</p>"
+            "<p class='section-title'>Team Averages</p>",
+            unsafe_allow_html=True,
+        )
+
+        fl_summary = (
+            tutor_summary.groupby("fl")
+            .agg(tutors=("tutor_name", "count"), avg_attended=("attended", "mean"),
+                 avg_prep=("prep", "mean"), avg_unattended=("unattended", "mean"))
+            .reset_index().rename(columns={"fl": "Faculty Leader"}).sort_values("Faculty Leader")
+        )
+        for c in ["avg_attended", "avg_prep", "avg_unattended"]:
+            fl_summary[c] = fl_summary[c].round(1)
+
+        col_pc, col_pt = st.columns([1.3, 1])
+        with col_pc:
+            fig_prep = go.Figure()
+            fig_prep.add_trace(go.Bar(x=fl_summary["Faculty Leader"], y=fl_summary["avg_attended"],
+                name="Attended", marker_color="#3b82f6", text=fl_summary["avg_attended"],
+                textposition="inside", textfont=dict(size=12, color="white")))
+            fig_prep.add_trace(go.Bar(x=fl_summary["Faculty Leader"], y=fl_summary["avg_prep"],
+                name="Prep Time", marker_color="#8b5cf6", text=fl_summary["avg_prep"],
+                textposition="inside", textfont=dict(size=12, color="white")))
+            fig_prep.add_trace(go.Bar(x=fl_summary["Faculty Leader"], y=fl_summary["avg_unattended"],
+                name="Unattended", marker_color="#94a3b8", text=fl_summary["avg_unattended"],
+                textposition="inside", textfont=dict(size=12, color="white")))
+            fig_prep.update_layout(barmode="stack", plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)", font=dict(family="DM Sans", color="#475569"),
+                legend=dict(orientation="h", y=1.08, x=0.5, xanchor="center", font=dict(size=12)),
+                margin=dict(l=40, r=20, t=40, b=60),
+                xaxis=dict(tickangle=-30, gridcolor="rgba(226,232,240,0.8)"),
+                yaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Avg Hours"), height=400)
+            st.plotly_chart(fig_prep, use_container_width=True)
+        with col_pt:
+            st.dataframe(fl_summary.rename(columns={"tutors": "Tutors", "avg_attended": "Avg Attended",
+                "avg_prep": "Avg Prep", "avg_unattended": "Avg Unattended"}),
+                hide_index=True, use_container_width=True, height=400)
+
+        st.markdown("")
+        st.markdown(
+            "<p class='section-label'>Trend</p>"
+            "<p class='section-title'>Weekly Hours Over Time</p>",
+            unsafe_allow_html=True,
+        )
+        weekly = prep.groupby("week_of").agg(attended=("attended_sessions", "sum"),
+            prep_hrs=("session_and_email_prep", "sum"), unattended=("unattended_sessions", "sum")
+        ).reset_index().sort_values("week_of")
+        fig_trend = go.Figure()
+        fig_trend.add_trace(go.Scatter(x=weekly["week_of"], y=weekly["attended"],
+            name="Attended", mode="lines+markers", marker_color="#3b82f6"))
+        fig_trend.add_trace(go.Scatter(x=weekly["week_of"], y=weekly["prep_hrs"],
+            name="Prep Time", mode="lines+markers", marker_color="#8b5cf6"))
+        fig_trend.add_trace(go.Scatter(x=weekly["week_of"], y=weekly["unattended"],
+            name="Unattended", mode="lines+markers", marker_color="#94a3b8"))
+        fig_trend.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="DM Sans", color="#475569"),
+            legend=dict(orientation="h", y=1.08, x=0.5, xanchor="center", font=dict(size=12)),
+            margin=dict(l=40, r=20, t=40, b=40),
+            xaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Week Of"),
+            yaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Total Hours"), height=350)
+        st.plotly_chart(fig_trend, use_container_width=True)
+
+        st.markdown("")
+        st.markdown(
+            "<p class='section-label'>Detail</p>"
+            "<p class='section-title'>Tutor-Level Breakdown</p>",
+            unsafe_allow_html=True,
+        )
+        pf1, pf2 = st.columns(2)
+        with pf1:
+            sel_prep_fl = st.multiselect("Filter by Faculty Leader", sorted(tutor_summary["fl"].dropna().unique()), key="prep_fl_filter")
+        with pf2:
+            sel_prep_tutor = st.multiselect("Filter by Tutor", sorted(tutor_summary["tutor_name"].dropna().unique()), key="prep_tutor_filter")
+        prep_display = tutor_summary.rename(columns={"tutor_name": "Tutor", "fl": "Faculty Leader",
+            "tier": "Tier", "delivery_target": "Del. Target", "attended": "Attended Hrs",
+            "prep": "Prep Hrs", "unattended": "Unattended Hrs", "total": "Total Hrs"})
+        if sel_prep_fl:
+            prep_display = prep_display[prep_display["Faculty Leader"].isin(sel_prep_fl)]
+        if sel_prep_tutor:
+            prep_display = prep_display[prep_display["Tutor"].isin(sel_prep_tutor)]
+        st.dataframe(prep_display, hide_index=True, use_container_width=True,
+                     height=min(600, len(prep_display) * 35 + 60))
+        st.download_button("📥 Download Prep Time CSV",
+            data=prep_display.to_csv(index=False).encode("utf-8"),
+            file_name=f"prep_time_{date.today().isoformat()}.csv", mime="text/csv", key="prep_download")
 
     # ══════════════════════════════════════════════════════════════════════════
     # PAGE — KPI COMPARISON
