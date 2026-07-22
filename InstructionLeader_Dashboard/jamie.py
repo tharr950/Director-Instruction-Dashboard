@@ -1462,9 +1462,6 @@ def render_app(config):
         col_pc, col_pt = st.columns([1.3, 1])
         with col_pc:
             fig_prep = go.Figure()
-            fig_prep.add_trace(go.Bar(x=fl_summary["Faculty Leader"], y=fl_summary["avg_attended"],
-                name="Attended", marker_color="#3b82f6", text=fl_summary["avg_attended"],
-                textposition="inside", textfont=dict(size=12, color="white")))
             fig_prep.add_trace(go.Bar(x=fl_summary["Faculty Leader"], y=fl_summary["avg_prep"],
                 name="Prep Time", marker_color="#8b5cf6", text=fl_summary["avg_prep"],
                 textposition="inside", textfont=dict(size=12, color="white")))
