@@ -1450,6 +1450,72 @@ def render_app(config):
         pm3.metric("Avg % Unattended", f"{tutor_summary['pct_unattended'].mean():.1f}%")
         pm4.metric("Total Tutors", len(tutor_summary))
 
+        # Determine flagged tutors — same logic as the row-highlight rule,
+        # captured via % Unattended threshold once Prep > 0 (or Prep % alone at same thresholds)
+        def is_flagged(row):
+            prep_pct = row.get("pct_prep", 0)
+            unatt_pct = row.get("pct_unattended", 0)
+            prep_hrs = row.get("prep", 0)
+            if pd.isna(prep_pct) or pd.isna(unatt_pct):
+                return False
+            if prep_pct >= 10:
+                return True
+            if prep_hrs and prep_hrs > 0 and (prep_pct + unatt_pct) >= 10:
+                return True
+            return False
+
+        tutor_summary["_flagged"] = tutor_summary.apply(is_flagged, axis=1)
+
+        st.markdown("")
+        st.markdown(
+            "<p class='section-label'>Flags</p>"
+            "<p class='section-title'>Tutors Flagged (Prep / Unattended Time)</p>",
+            unsafe_allow_html=True,
+        )
+
+        total_tutors_all = len(tutor_summary)
+        total_flagged_all = int(tutor_summary["_flagged"].sum())
+        pct_flagged_all = round(total_flagged_all / total_tutors_all * 100, 1) if total_tutors_all > 0 else 0
+
+        fg1, fg2 = st.columns(2)
+        fg1.metric("Total Tutors Flagged", f"{total_flagged_all} of {total_tutors_all}")
+        fg2.metric("% Flagged", f"{pct_flagged_all:.1f}%")
+
+        st.markdown("")
+        fl_flag_summary = (
+            tutor_summary.groupby("fl")
+            .agg(
+                total_tutors=("tutor_name", "count"),
+                flagged=("_flagged", "sum"),
+            )
+            .reset_index()
+            .rename(columns={"fl": "Faculty Leader", "total_tutors": "Total Tutors", "flagged": "Flagged"})
+            .sort_values("Faculty Leader")
+        )
+        fl_flag_summary["Flagged"] = fl_flag_summary["Flagged"].astype(int)
+        fl_flag_summary["% Flagged"] = (fl_flag_summary["Flagged"] / fl_flag_summary["Total Tutors"] * 100).round(1)
+
+        def highlight_fl_flag_pct(row):
+            styles = [""] * len(row)
+            pct = row.get("% Flagged", 0)
+            if pd.notna(pct):
+                if pct >= 20:
+                    color = "background-color: rgba(239,68,68,0.15)"
+                elif pct >= 15:
+                    color = "background-color: rgba(249,115,22,0.15)"
+                elif pct >= 10:
+                    color = "background-color: rgba(234,179,8,0.15)"
+                else:
+                    color = ""
+                if color:
+                    idx = list(row.index).index("% Flagged")
+                    styles[idx] = color
+            return styles
+
+        styled_fl_flags = fl_flag_summary.style.apply(highlight_fl_flag_pct, axis=1).format({"% Flagged": "{:.1f}%"})
+        st.dataframe(styled_fl_flags, hide_index=True, use_container_width=True,
+                     height=min(500, len(fl_flag_summary) * 35 + 60))
+
         st.markdown("")
         st.markdown(
             "<p class='section-label'>By Faculty Leader</p>"
