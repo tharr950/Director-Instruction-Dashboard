@@ -1436,9 +1436,9 @@ def render_app(config):
         for c in ["attended", "prep", "unattended"]:
             tutor_summary[c] = tutor_summary[c].round(1)
         tutor_summary["total"] = (tutor_summary["attended"] + tutor_summary["prep"] + tutor_summary["unattended"]).round(1)
-        tutor_summary["pct_attended"] = (tutor_summary["attended"] / tutor_summary["total"].replace(0, pd.NA) * 100).round(1)
-        tutor_summary["pct_prep"] = (tutor_summary["prep"] / tutor_summary["total"].replace(0, pd.NA) * 100).round(1)
-        tutor_summary["pct_unattended"] = (tutor_summary["unattended"] / tutor_summary["total"].replace(0, pd.NA) * 100).round(1)
+        tutor_summary["pct_attended"] = (tutor_summary["attended"] / tutor_summary["total"].replace(0, np.nan) * 100).round(1)
+        tutor_summary["pct_prep"] = (tutor_summary["prep"] / tutor_summary["total"].replace(0, np.nan) * 100).round(1)
+        tutor_summary["pct_unattended"] = (tutor_summary["unattended"] / tutor_summary["total"].replace(0, np.nan) * 100).round(1)
 
         pm1, pm2, pm3, pm4 = st.columns(4)
         pm1.metric("Avg % Attended", f"{tutor_summary['pct_attended'].mean():.1f}%")
