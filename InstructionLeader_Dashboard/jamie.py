@@ -1421,7 +1421,9 @@ def render_app(config):
         prep = prep_data[prep_data["fl"].isin(selected_managers)].copy()
 
         from datetime import timedelta
-        range_end = date.today() - timedelta(days=date.today().weekday() + 1)
+        _today = date.today()
+        _current_week_sunday = _today - timedelta(days=(_today.weekday() + 1) % 7)
+        range_end = _current_week_sunday - timedelta(days=1)
         range_start = range_end - timedelta(weeks=sel_prep_weeks) + timedelta(days=1)
         st.markdown(
             f"<p style='color:#64748b; font-size:0.82rem; margin-top:-12px;'>"
