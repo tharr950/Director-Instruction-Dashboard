@@ -1545,6 +1545,23 @@ def render_app(config):
                 if color:
                     idx = list(row.index).index("% Prep")
                     styles[idx] = color
+
+            # Unattended flag — only if prep time > 0
+            prep_hrs = row.get("Prep Hrs", 0)
+            pct_unattended = row.get("% Unattended", 0)
+            if pd.notna(prep_hrs) and prep_hrs > 0 and pd.notna(pct_unattended):
+                if pct_unattended >= 20:
+                    u_color = "background-color: rgba(239,68,68,0.15)"
+                elif pct_unattended >= 15:
+                    u_color = "background-color: rgba(249,115,22,0.15)"
+                elif pct_unattended >= 10:
+                    u_color = "background-color: rgba(234,179,8,0.15)"
+                else:
+                    u_color = ""
+                if u_color:
+                    idx_u = list(row.index).index("% Unattended")
+                    styles[idx_u] = u_color
+
             return styles
 
         styled_prep = prep_display.style.apply(highlight_prep_pct, axis=1).format({
@@ -1552,7 +1569,10 @@ def render_app(config):
         })
         st.markdown(
             "<p style='font-size:0.78rem; color:#64748b; margin-bottom:8px;'>"
-            "🟡 % Prep ≥10% &nbsp;&nbsp;|&nbsp;&nbsp; 🟠 ≥15% &nbsp;&nbsp;|&nbsp;&nbsp; 🔴 ≥20%</p>",
+            "🟡 % Prep ≥10% &nbsp;&nbsp;|&nbsp;&nbsp; 🟠 ≥15% &nbsp;&nbsp;|&nbsp;&nbsp; 🔴 ≥20%"
+            "&nbsp;&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;&nbsp;"
+            "% Unattended flagged only if Prep Time > 0: "
+            "🟡 ≥10% &nbsp;&nbsp;|&nbsp;&nbsp; 🟠 ≥15% &nbsp;&nbsp;|&nbsp;&nbsp; 🔴 ≥20%</p>",
             unsafe_allow_html=True,
         )
         st.dataframe(styled_prep, hide_index=True, use_container_width=True,
