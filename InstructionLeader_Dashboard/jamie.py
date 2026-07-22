@@ -197,7 +197,9 @@ def render_app(config):
     def load_prep_time(lookback_weeks=12):
         today = date.today()
         from datetime import timedelta
-        day_end = today - timedelta(days=today.weekday() + 1)
+        # Exclude the current in-progress week entirely
+        current_week_sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        day_end = current_week_sunday - timedelta(days=1)  # last Saturday before this week
         day_start = day_end - timedelta(weeks=lookback_weeks) + timedelta(days=1)
         query = f"""
         WITH time_period AS (
