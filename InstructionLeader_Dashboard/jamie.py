@@ -1548,15 +1548,17 @@ def render_app(config):
                     idx = list(row.index).index("% Prep")
                     styles[idx] = color
 
-            # Unattended flag — only if prep time > 0
+            # Unattended flag — only if prep time > 0, based on combined prep + unattended %
             prep_hrs = row.get("Prep Hrs", 0)
+            pct_prep_val = row.get("% Prep", 0)
             pct_unattended = row.get("% Unattended", 0)
-            if pd.notna(prep_hrs) and prep_hrs > 0 and pd.notna(pct_unattended):
-                if pct_unattended >= 20:
+            if pd.notna(prep_hrs) and prep_hrs > 0 and pd.notna(pct_unattended) and pd.notna(pct_prep_val):
+                combined_pct = pct_prep_val + pct_unattended
+                if combined_pct >= 20:
                     u_color = "background-color: rgba(239,68,68,0.15)"
-                elif pct_unattended >= 15:
+                elif combined_pct >= 15:
                     u_color = "background-color: rgba(249,115,22,0.15)"
-                elif pct_unattended >= 10:
+                elif combined_pct >= 10:
                     u_color = "background-color: rgba(234,179,8,0.15)"
                 else:
                     u_color = ""
@@ -1573,7 +1575,7 @@ def render_app(config):
             "<p style='font-size:0.78rem; color:#64748b; margin-bottom:8px;'>"
             "🟡 % Prep ≥10% &nbsp;&nbsp;|&nbsp;&nbsp; 🟠 ≥15% &nbsp;&nbsp;|&nbsp;&nbsp; 🔴 ≥20%"
             "&nbsp;&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;&nbsp;"
-            "% Unattended flagged only if Prep Time > 0: "
+            "% Unattended flagged only if Prep Time > 0, using combined Prep+Unattended %: "
             "🟡 ≥10% &nbsp;&nbsp;|&nbsp;&nbsp; 🟠 ≥15% &nbsp;&nbsp;|&nbsp;&nbsp; 🔴 ≥20%</p>",
             unsafe_allow_html=True,
         )
