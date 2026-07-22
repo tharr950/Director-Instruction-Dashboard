@@ -1413,6 +1413,12 @@ def render_app(config):
             "<p class='section-title'>Attended, Unattended & Prep Time</p>",
             unsafe_allow_html=True,
         )
+        st.markdown(
+            "<p style='color:#64748b; font-size:0.8rem; font-style:italic; margin-top:-8px;'>"
+            "ℹ️ Prep Time only includes <b>Session Preparation</b> and <b>Email or Slack Communication</b> "
+            "logged events — it does not include professional development, meetings, or other event categories.</p>",
+            unsafe_allow_html=True,
+        )
 
         prep_range = {"Past 4 Weeks": 4, "Past 8 Weeks": 8, "Past 12 Weeks": 12}
         sel_prep_range = st.selectbox("Date Range", list(prep_range.keys()), index=2, key="prep_range")
