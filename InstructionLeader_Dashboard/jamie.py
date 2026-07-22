@@ -1436,11 +1436,14 @@ def render_app(config):
         for c in ["attended", "prep", "unattended"]:
             tutor_summary[c] = tutor_summary[c].round(1)
         tutor_summary["total"] = (tutor_summary["attended"] + tutor_summary["prep"] + tutor_summary["unattended"]).round(1)
+        tutor_summary["pct_attended"] = (tutor_summary["attended"] / tutor_summary["total"].replace(0, pd.NA) * 100).round(1)
+        tutor_summary["pct_prep"] = (tutor_summary["prep"] / tutor_summary["total"].replace(0, pd.NA) * 100).round(1)
+        tutor_summary["pct_unattended"] = (tutor_summary["unattended"] / tutor_summary["total"].replace(0, pd.NA) * 100).round(1)
 
         pm1, pm2, pm3, pm4 = st.columns(4)
-        pm1.metric("Avg Attended Hrs", f"{tutor_summary['attended'].mean():.1f}")
-        pm2.metric("Avg Prep Hrs", f"{tutor_summary['prep'].mean():.1f}")
-        pm3.metric("Avg Unattended Hrs", f"{tutor_summary['unattended'].mean():.1f}")
+        pm1.metric("Avg % Attended", f"{tutor_summary['pct_attended'].mean():.1f}%")
+        pm2.metric("Avg % Prep Time", f"{tutor_summary['pct_prep'].mean():.1f}%")
+        pm3.metric("Avg % Unattended", f"{tutor_summary['pct_unattended'].mean():.1f}%")
         pm4.metric("Total Tutors", len(tutor_summary))
 
         st.markdown("")
@@ -1452,33 +1455,38 @@ def render_app(config):
 
         fl_summary = (
             tutor_summary.groupby("fl")
-            .agg(tutors=("tutor_name", "count"), avg_attended=("attended", "mean"),
-                 avg_prep=("prep", "mean"), avg_unattended=("unattended", "mean"))
+            .agg(tutors=("tutor_name", "count"), avg_pct_attended=("pct_attended", "mean"),
+                 avg_pct_prep=("pct_prep", "mean"), avg_pct_unattended=("pct_unattended", "mean"))
             .reset_index().rename(columns={"fl": "Faculty Leader"}).sort_values("Faculty Leader")
         )
-        for c in ["avg_attended", "avg_prep", "avg_unattended"]:
+        for c in ["avg_pct_attended", "avg_pct_prep", "avg_pct_unattended"]:
             fl_summary[c] = fl_summary[c].round(1)
 
         col_pc, col_pt = st.columns([1.3, 1])
         with col_pc:
             fig_prep = go.Figure()
-            fig_prep.add_trace(go.Bar(x=fl_summary["Faculty Leader"], y=fl_summary["avg_prep"],
-                name="Prep Time", marker_color="#8b5cf6", text=fl_summary["avg_prep"],
+            fig_prep.add_trace(go.Bar(x=fl_summary["Faculty Leader"], y=fl_summary["avg_pct_prep"],
+                name="% Prep Time", marker_color="#8b5cf6", text=fl_summary["avg_pct_prep"].apply(lambda x: f"{x:.1f}%"),
                 textposition="inside", textfont=dict(size=12, color="white")))
-            fig_prep.add_trace(go.Bar(x=fl_summary["Faculty Leader"], y=fl_summary["avg_unattended"],
-                name="Unattended", marker_color="#94a3b8", text=fl_summary["avg_unattended"],
+            fig_prep.add_trace(go.Bar(x=fl_summary["Faculty Leader"], y=fl_summary["avg_pct_unattended"],
+                name="% Unattended", marker_color="#94a3b8", text=fl_summary["avg_pct_unattended"].apply(lambda x: f"{x:.1f}%"),
                 textposition="inside", textfont=dict(size=12, color="white")))
             fig_prep.update_layout(barmode="stack", plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)", font=dict(family="DM Sans", color="#475569"),
                 legend=dict(orientation="h", y=1.08, x=0.5, xanchor="center", font=dict(size=12)),
                 margin=dict(l=40, r=20, t=40, b=60),
                 xaxis=dict(tickangle=-30, gridcolor="rgba(226,232,240,0.8)"),
-                yaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Avg Hours"), height=400)
+                yaxis=dict(gridcolor="rgba(226,232,240,0.8)", title="Avg %"), height=400)
             st.plotly_chart(fig_prep, use_container_width=True)
         with col_pt:
-            st.dataframe(fl_summary.rename(columns={"tutors": "Tutors", "avg_attended": "Avg Attended",
-                "avg_prep": "Avg Prep", "avg_unattended": "Avg Unattended"}),
-                hide_index=True, use_container_width=True, height=400)
+            st.dataframe(fl_summary.rename(columns={"tutors": "Tutors", "avg_pct_attended": "Avg % Attended",
+                "avg_pct_prep": "Avg % Prep", "avg_pct_unattended": "Avg % Unattended"}),
+                hide_index=True, use_container_width=True, height=400,
+                column_config={
+                    "Avg % Attended": st.column_config.NumberColumn(format="%.1f%%"),
+                    "Avg % Prep": st.column_config.NumberColumn(format="%.1f%%"),
+                    "Avg % Unattended": st.column_config.NumberColumn(format="%.1f%%"),
+                })
 
         st.markdown("")
         st.markdown(
@@ -1490,8 +1498,6 @@ def render_app(config):
             prep_hrs=("session_and_email_prep", "sum"), unattended=("unattended_sessions", "sum")
         ).reset_index().sort_values("week_of")
         fig_trend = go.Figure()
-        fig_trend.add_trace(go.Scatter(x=weekly["week_of"], y=weekly["attended"],
-            name="Attended", mode="lines+markers", marker_color="#3b82f6"))
         fig_trend.add_trace(go.Scatter(x=weekly["week_of"], y=weekly["prep_hrs"],
             name="Prep Time", mode="lines+markers", marker_color="#8b5cf6"))
         fig_trend.add_trace(go.Scatter(x=weekly["week_of"], y=weekly["unattended"],
@@ -1517,12 +1523,39 @@ def render_app(config):
             sel_prep_tutor = st.multiselect("Filter by Tutor", sorted(tutor_summary["tutor_name"].dropna().unique()), key="prep_tutor_filter")
         prep_display = tutor_summary.rename(columns={"tutor_name": "Tutor", "fl": "Faculty Leader",
             "tier": "Tier", "delivery_target": "Del. Target", "attended": "Attended Hrs",
-            "prep": "Prep Hrs", "unattended": "Unattended Hrs", "total": "Total Hrs"})
+            "prep": "Prep Hrs", "unattended": "Unattended Hrs", "total": "Total Hrs",
+            "pct_attended": "% Attended", "pct_prep": "% Prep", "pct_unattended": "% Unattended"})
         if sel_prep_fl:
             prep_display = prep_display[prep_display["Faculty Leader"].isin(sel_prep_fl)]
         if sel_prep_tutor:
             prep_display = prep_display[prep_display["Tutor"].isin(sel_prep_tutor)]
-        st.dataframe(prep_display, hide_index=True, use_container_width=True,
+
+        def highlight_prep_pct(row):
+            styles = [""] * len(row)
+            pct = row.get("% Prep", 0)
+            if pd.notna(pct):
+                if pct >= 20:
+                    color = "background-color: rgba(239,68,68,0.15)"
+                elif pct >= 15:
+                    color = "background-color: rgba(249,115,22,0.15)"
+                elif pct >= 10:
+                    color = "background-color: rgba(234,179,8,0.15)"
+                else:
+                    color = ""
+                if color:
+                    idx = list(row.index).index("% Prep")
+                    styles[idx] = color
+            return styles
+
+        styled_prep = prep_display.style.apply(highlight_prep_pct, axis=1).format({
+            "% Attended": "{:.1f}%", "% Prep": "{:.1f}%", "% Unattended": "{:.1f}%",
+        })
+        st.markdown(
+            "<p style='font-size:0.78rem; color:#64748b; margin-bottom:8px;'>"
+            "🟡 % Prep ≥10% &nbsp;&nbsp;|&nbsp;&nbsp; 🟠 ≥15% &nbsp;&nbsp;|&nbsp;&nbsp; 🔴 ≥20%</p>",
+            unsafe_allow_html=True,
+        )
+        st.dataframe(styled_prep, hide_index=True, use_container_width=True,
                      height=min(600, len(prep_display) * 35 + 60))
         st.download_button("📥 Download Prep Time CSV",
             data=prep_display.to_csv(index=False).encode("utf-8"),
