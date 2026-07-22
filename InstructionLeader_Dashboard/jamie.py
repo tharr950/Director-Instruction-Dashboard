@@ -1458,19 +1458,28 @@ def render_app(config):
 
         # Determine flagged tutors — same logic as the row-highlight rule,
         # captured via % Unattended threshold once Prep > 0 (or Prep % alone at same thresholds)
-        def is_flagged(row):
+        def flag_severity(row):
             prep_pct = row.get("pct_prep", 0)
             unatt_pct = row.get("pct_unattended", 0)
             prep_hrs = row.get("prep", 0)
             if pd.isna(prep_pct) or pd.isna(unatt_pct):
-                return False
-            if prep_pct >= 10:
-                return True
-            if prep_hrs and prep_hrs > 0 and (prep_pct + unatt_pct) >= 10:
-                return True
-            return False
+                return None
 
-        tutor_summary["_flagged"] = tutor_summary.apply(is_flagged, axis=1)
+            # Effective % used for flagging — prep alone, or combined if prep > 0
+            eff_pct = prep_pct
+            if prep_hrs and prep_hrs > 0:
+                eff_pct = max(eff_pct, prep_pct + unatt_pct)
+
+            if eff_pct >= 20:
+                return "red"
+            elif eff_pct >= 15:
+                return "orange"
+            elif eff_pct >= 10:
+                return "yellow"
+            return None
+
+        tutor_summary["_severity"] = tutor_summary.apply(flag_severity, axis=1)
+        tutor_summary["_flagged"] = tutor_summary["_severity"].notna()
 
         st.markdown("")
         st.markdown(
@@ -1482,24 +1491,45 @@ def render_app(config):
         total_tutors_all = len(tutor_summary)
         total_flagged_all = int(tutor_summary["_flagged"].sum())
         pct_flagged_all = round(total_flagged_all / total_tutors_all * 100, 1) if total_tutors_all > 0 else 0
+        red_count_all = int((tutor_summary["_severity"] == "red").sum())
+        orange_count_all = int((tutor_summary["_severity"] == "orange").sum())
+        yellow_count_all = int((tutor_summary["_severity"] == "yellow").sum())
 
-        fg1, fg2 = st.columns(2)
+        fg1, fg2, fg3, fg4, fg5 = st.columns(5)
         fg1.metric("Total Tutors Flagged", f"{total_flagged_all} of {total_tutors_all}")
         fg2.metric("% Flagged", f"{pct_flagged_all:.1f}%")
+        fg3.metric("🔴 Red (≥20%)", red_count_all)
+        fg4.metric("🟠 Orange (≥15%)", orange_count_all)
+        fg5.metric("🟡 Yellow (≥10%)", yellow_count_all)
 
         st.markdown("")
+        tutor_summary["_is_red"] = tutor_summary["_severity"] == "red"
+        tutor_summary["_is_orange"] = tutor_summary["_severity"] == "orange"
+        tutor_summary["_is_yellow"] = tutor_summary["_severity"] == "yellow"
+
         fl_flag_summary = (
             tutor_summary.groupby("fl")
             .agg(
                 total_tutors=("tutor_name", "count"),
                 flagged=("_flagged", "sum"),
+                red=("_is_red", "sum"),
+                orange=("_is_orange", "sum"),
+                yellow=("_is_yellow", "sum"),
             )
             .reset_index()
-            .rename(columns={"fl": "Faculty Leader", "total_tutors": "Total Tutors", "flagged": "Flagged"})
+            .rename(columns={
+                "fl": "Faculty Leader", "total_tutors": "Total Tutors", "flagged": "Flagged",
+                "red": "🔴 Red", "orange": "🟠 Orange", "yellow": "🟡 Yellow",
+            })
             .sort_values("Faculty Leader")
         )
-        fl_flag_summary["Flagged"] = fl_flag_summary["Flagged"].astype(int)
+        for c in ["Flagged", "🔴 Red", "🟠 Orange", "🟡 Yellow"]:
+            fl_flag_summary[c] = fl_flag_summary[c].astype(int)
         fl_flag_summary["% Flagged"] = (fl_flag_summary["Flagged"] / fl_flag_summary["Total Tutors"] * 100).round(1)
+
+        fl_flag_summary = fl_flag_summary[
+            ["Faculty Leader", "Total Tutors", "Flagged", "% Flagged", "🔴 Red", "🟠 Orange", "🟡 Yellow"]
+        ]
 
         def highlight_fl_flag_pct(row):
             styles = [""] * len(row)
