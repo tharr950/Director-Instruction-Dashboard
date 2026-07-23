@@ -286,7 +286,8 @@ def render_app(config):
                 CASE WHEN histories.updated_by_type = 'Employee'
                      THEN histories.updated_by_id ELSE NULL END AS updated_by_employee_id,
                 CASE WHEN histories.value = 'Restricted' THEN True ELSE False END AS restricted,
-                histories.created_at AS status_starts_at
+                histories.created_at AS status_starts_at,
+                histories.id AS history_id
             FROM dw.histories
             JOIN dw.employees ON histories.item_id = employees.id
             WHERE employees.end_date IS NULL
@@ -295,7 +296,8 @@ def render_app(config):
         cte_employee_wo_history AS (
             SELECT id AS employee_id, -1 AS updated_by_employee_id,
                 CASE WHEN employees.tutor_type = 'Restricted' THEN True ELSE False END AS restricted,
-                employees.created_at AS status_starts_at
+                employees.created_at AS status_starts_at,
+                -1 AS history_id
             FROM dw.employees
             WHERE employees.end_date IS NULL
                 AND id NOT IN (SELECT DISTINCT employee_id FROM cte_employee_with_histories)
@@ -317,16 +319,16 @@ def render_app(config):
                 cte_all_histories.restricted,
                 cte_all_histories.status_starts_at,
                 CASE
-                    WHEN LAG(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at DESC) IS NULL
+                    WHEN LAG(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at ASC, history_id ASC) IS NULL
                     THEN NULL
-                    ELSE DATEADD(SECOND, -1, LAG(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at DESC))
+                    ELSE DATEADD(SECOND, -1, LEAD(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at ASC, history_id ASC))
                 END AS status_ends_at,
                 DATEDIFF(DAY, status_starts_at, status_ends_at) AS days_in_effect,
-                CASE WHEN LAG(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at DESC) IS NULL
+                CASE WHEN LEAD(status_starts_at,1) OVER (PARTITION BY employee_id ORDER BY status_starts_at ASC, history_id ASC) IS NULL
                     THEN 1 ELSE 0 END AS current_status_flag
             FROM cte_all_histories
             GROUP BY cte_all_histories.employee_id, cte_all_histories.updated_by_employee_id,
-                     cte_all_histories.restricted, cte_all_histories.status_starts_at
+                     cte_all_histories.restricted, cte_all_histories.status_starts_at, cte_all_histories.history_id
         )
         SELECT
             cte_last_restricted.employee_id,
